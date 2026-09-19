@@ -31,8 +31,16 @@ class Axis : public QObject
     Q_PROPERTY(double jogSpeedFast READ jogSpeedFast NOTIFY parametersChanged)
     Q_PROPERTY(bool atMinLimit READ atMinLimit NOTIFY limitStateChanged)
     Q_PROPERTY(bool atMaxLimit READ atMaxLimit NOTIFY limitStateChanged)
+    Q_PROPERTY(Interlock interlock READ interlock NOTIFY interlockChanged)
 
 public:
+    // Hareket neden kilitli?
+    enum Interlock {
+        NoInterlock, // kilit yok, hareket edebilir
+        ClampClosed  // mengene boruyu tutuyor (X ve A için)
+    };
+    Q_ENUM(Interlock)
+
     Axis(const QString &name, bool rotary, QObject *parent = nullptr)
         : QObject(parent)
         , m_name(name)
@@ -53,6 +61,7 @@ public:
     double jogSpeedFast() const { return m_jogSpeedFast; } // jog hızı, hızlı (birim/sn)
     bool atMinLimit() const { return m_atMinLimit; }       // alt limite dayandı mı?
     bool atMaxLimit() const { return m_atMaxLimit; }       // üst limite dayandı mı?
+    Interlock interlock() const { return m_interlock; }    // hareket kilidi
 
     // Aşağıdaki fonksiyonlar QML'den çağrılamaz; yalnızca makine sınıfları kullanır.
     // Değer gerçekten değiştiyse sinyal yayılır; ekran da sadece o zaman güncellenir.
@@ -123,6 +132,14 @@ public:
         emit limitStateChanged();
     }
 
+    void setInterlock(Interlock interlock)
+    {
+        if (m_interlock == interlock)
+            return;
+        m_interlock = interlock;
+        emit interlockChanged();
+    }
+
 signals:
     void positionChanged();
     void movingChanged();
@@ -130,6 +147,7 @@ signals:
     void homedChanged();
     void parametersChanged();
     void limitStateChanged();
+    void interlockChanged();
 
 private:
     const QString m_name;
@@ -145,4 +163,5 @@ private:
     double m_jogSpeedFast = 0.0;
     bool m_atMinLimit = false;
     bool m_atMaxLimit = false;
+    Interlock m_interlock = NoInterlock;
 };

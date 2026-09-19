@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QtQml/qqmlregistration.h>
 
+#include "Actuator.h"
 #include "Axis.h"
 
 // Makineyle konuşma sözleşmesi.
@@ -23,6 +24,11 @@ class IMachine : public QObject
     Q_PROPERTY(Axis *axisX READ axisX CONSTANT)
     Q_PROPERTY(Axis *axisB READ axisB CONSTANT)
     Q_PROPERTY(Axis *axisA READ axisA CONSTANT)
+    Q_PROPERTY(PumpState pumpState READ pumpState NOTIFY pumpStateChanged)
+    Q_PROPERTY(double pressure READ pressure NOTIFY pressureChanged)
+    Q_PROPERTY(Actuator *clamp READ clamp CONSTANT)
+    Q_PROPERTY(Actuator *mandrel READ mandrel CONSTANT)
+    Q_PROPERTY(Actuator *collet READ collet CONSTANT)
 
 public:
     enum State {
@@ -32,11 +38,22 @@ public:
     };
     Q_ENUM(State)
 
+    enum PumpState {
+        PumpStopped,  // durdu, basınç yok
+        PumpStarting, // çalışmaya başladı, basınç yükseliyor
+        PumpRunning,  // çalışıyor, basınç tam
+        PumpStopping  // durduruldu, basınç düşüyor
+    };
+    Q_ENUM(PumpState)
+
     explicit IMachine(QObject *parent = nullptr)
         : QObject(parent)
         , m_axisX(new Axis(QStringLiteral("X"), false, this))
         , m_axisB(new Axis(QStringLiteral("B"), true, this))
         , m_axisA(new Axis(QStringLiteral("A"), true, this))
+        , m_clamp(new Actuator(this))
+        , m_mandrel(new Actuator(this))
+        , m_collet(new Actuator(this))
     {
     }
 
@@ -45,12 +62,18 @@ public:
     Axis *axisB() const { return m_axisB; }
     Axis *axisA() const { return m_axisA; }
 
+    PumpState pumpState() const { return m_pumpState; }
+    double pressure() const { return m_pressure; } // hidrolik basınç (bar)
+    Actuator *clamp() const { return m_clamp; }     // mengene: boruyu büküm kalıbına sıkar
+    Actuator *mandrel() const { return m_mandrel; } // malafa: bükülen yerde borunun içine girer
+    Actuator *collet() const { return m_collet; }   // pens: arabada borunun ucunu tutar
+
     // Sanal makine mi? Ekranda "SİMÜLASYON" etiketi göstermek için.
     virtual bool isSimulation() const = 0;
 
     // Komutlar: ekrandaki butonlar bunları çağırır.
     Q_INVOKABLE virtual void startHoming() = 0; // Referans ara (HOME)
-    Q_INVOKABLE virtual void stop() = 0;        // Tüm hareketleri durdur (STOP)
+    Q_INVOKABLE virtual void stop() = 0;        // Tüm eksen hareketlerini durdur (STOP)
 
     // Elle sürme (jog), push buton mantığıyla:
     //   startJog      butona basıldı: ekseni verilen yönde (-1 / +1) sürmeye başla
@@ -66,11 +89,22 @@ public:
     // Yalnızca makine HAZIR iken çalışır; limit dışındaki hedefi makine reddeder.
     Q_INVOKABLE virtual void moveTo(Axis *axis, double target) = 0;
 
+    // Hidrolik pompa, "normal start/stop" mantığıyla: START ve STOP ayrı
+    // butonlardır, pompanın çalıştığını makine hatırlar (mühürleme).
+    Q_INVOKABLE virtual void startPump() = 0;
+    Q_INVOKABLE virtual void stopPump() = 0;
+
+    // Silindir, "kalıcı buton" mantığıyla: bir basış iş konumuna gönderir
+    // (on = true), ikinci basış geri alır. Komutu makine hatırlar.
+    Q_INVOKABLE virtual void setActuator(Actuator *actuator, bool on) = 0;
+
 signals:
     void stateChanged();
+    void pumpStateChanged();
+    void pressureChanged();
 
 protected:
-    // Durumu yalnızca alt sınıflar değiştirebilir.
+    // Bu değerleri yalnızca alt sınıflar değiştirebilir.
     void setState(State state)
     {
         if (m_state == state)
@@ -79,9 +113,30 @@ protected:
         emit stateChanged();
     }
 
+    void setPumpState(PumpState pumpState)
+    {
+        if (m_pumpState == pumpState)
+            return;
+        m_pumpState = pumpState;
+        emit pumpStateChanged();
+    }
+
+    void setPressure(double pressure)
+    {
+        if (m_pressure == pressure)
+            return;
+        m_pressure = pressure;
+        emit pressureChanged();
+    }
+
 private:
     State m_state = NotHomed;
+    PumpState m_pumpState = PumpStopped;
+    double m_pressure = 0.0;
     Axis *const m_axisX;
     Axis *const m_axisB;
     Axis *const m_axisA;
+    Actuator *const m_clamp;
+    Actuator *const m_mandrel;
+    Actuator *const m_collet;
 };

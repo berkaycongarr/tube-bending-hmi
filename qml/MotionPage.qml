@@ -122,6 +122,70 @@ Rectangle {
             fast: page.fastActive
         }
 
+        // Hidrolik: pompa (normal start/stop) ve silindirler (kalıcı butonlar)
+        Text {
+            Layout.topMargin: 4
+            text: qsTr("Hidrolik")
+            font.pixelSize: Theme.fontNormal
+            font.bold: true
+            color: Theme.text
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
+
+            PumpControl {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 260
+                Layout.preferredWidth: 300
+                Layout.preferredHeight: 104
+                machine: page.machine
+            }
+
+            ActuatorButton {
+                objectName: "clampButton"
+                Layout.fillWidth: true
+                Layout.minimumWidth: 160
+                Layout.preferredHeight: 104
+                machine: page.machine
+                actuator: page.machine.clamp
+                title: qsTr("MENGENE")
+                onText: qsTr("KAPALI")
+                offText: qsTr("AÇIK")
+                turningOnText: qsTr("KAPANIYOR…")
+                turningOffText: qsTr("AÇILIYOR…")
+            }
+
+            ActuatorButton {
+                objectName: "mandrelButton"
+                Layout.fillWidth: true
+                Layout.minimumWidth: 160
+                Layout.preferredHeight: 104
+                machine: page.machine
+                actuator: page.machine.mandrel
+                title: qsTr("MALAFA")
+                onText: qsTr("İLERİDE")
+                offText: qsTr("GERİDE")
+                turningOnText: qsTr("İLERİ GİDİYOR…")
+                turningOffText: qsTr("GERİ GELİYOR…")
+            }
+
+            ActuatorButton {
+                objectName: "colletButton"
+                Layout.fillWidth: true
+                Layout.minimumWidth: 160
+                Layout.preferredHeight: 104
+                machine: page.machine
+                actuator: page.machine.collet
+                title: qsTr("PENS")
+                onText: qsTr("KAPALI")
+                offText: qsTr("AÇIK")
+                turningOnText: qsTr("KAPANIYOR…")
+                turningOffText: qsTr("AÇILIYOR…")
+            }
+        }
+
         Item {
             Layout.fillHeight: true
         }
@@ -140,8 +204,11 @@ Rectangle {
         property real targetValue: NaN
 
         readonly property bool hasTarget: !isNaN(row.targetValue)
-        // Hedefe gitmek için referans şart: 0'ın nerede olduğu bilinmeli.
+        // Eksen kilitli mi (ör. mengene boruyu tutuyor)?
+        readonly property bool locked: row.axis.interlock !== Axis.NoInterlock
+        // Hedefe gitmek için referans şart (0'ın nerede olduğu bilinmeli) ve kilit olmamalı.
         readonly property bool canPosition: row.axis.homed && row.machine.state === Machine.Ready
+                                            && !row.locked
         readonly property bool atTarget: row.hasTarget && !row.axis.moving
                                          && Math.abs(row.axis.position - row.targetValue) < 0.005
 
@@ -153,10 +220,12 @@ Rectangle {
             return value.toFixed(0) + (row.axis.rotary ? " °/sn" : " mm/sn")
         }
 
-        // Konumun altındaki bilgi: anlık jog hızı ve limit durumu.
+        // Konumun altındaki bilgi: anlık jog hızı, kilit ve limit durumu.
         readonly property string info: {
             const speed = qsTr("Jog %1").arg(row.formatSpeed(row.fast ? row.axis.jogSpeedFast
                                                                       : row.axis.jogSpeedSlow))
+            if (row.axis.interlock === Axis.ClampClosed)
+                return speed + qsTr(" · Kilitli: mengene boruyu tutuyor")
             if (!row.axis.homed)
                 return speed + qsTr(" · Referanssız: limitler devre dışı")
             if (row.axis.atMinLimit)
@@ -168,7 +237,7 @@ Rectangle {
         }
 
         objectName: "row" + row.axis.name
-        implicitHeight: 88
+        implicitHeight: 84
         radius: Theme.radius
         color: "transparent"
         border.color: row.axis.moving ? Theme.active : Theme.panelBorder
@@ -178,10 +247,12 @@ Rectangle {
             anchors.fill: parent
             anchors.leftMargin: 20
             anchors.rightMargin: 12
-            spacing: 14
+            spacing: 10
 
+            // Sütun genişlikleri sabit: dar pencerede de satırlar alt alta hizalı kalır.
             ColumnLayout {
-                Layout.preferredWidth: 96
+                Layout.minimumWidth: 90
+                Layout.maximumWidth: 90
                 spacing: 0
 
                 Text {
@@ -201,6 +272,7 @@ Rectangle {
             // "Değer gör": eksenin gerçek konumu
             ColumnLayout {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 190
                 spacing: 2
 
                 Text {
@@ -214,14 +286,15 @@ Rectangle {
                     Layout.fillWidth: true
                     text: row.info
                     font.pixelSize: 13
-                    color: row.axis.homed ? Theme.textMuted : Theme.activeText
+                    color: row.axis.homed && !row.locked ? Theme.textMuted : Theme.activeText
                     elide: Text.ElideRight
                 }
             }
 
             ValueField {
                 objectName: "target" + row.axis.name
-                Layout.preferredWidth: 150
+                Layout.minimumWidth: 144
+                Layout.maximumWidth: 144
                 Layout.preferredHeight: 68
                 caption: row.atTarget ? qsTr("Hedefte ✓") : qsTr("Hedef")
                 captionColor: row.atTarget ? Theme.ok : Theme.textMuted
@@ -232,7 +305,8 @@ Rectangle {
 
             HmiButton {
                 objectName: "go" + row.axis.name
-                Layout.preferredWidth: 84
+                Layout.minimumWidth: 80
+                Layout.maximumWidth: 80
                 Layout.preferredHeight: 68
                 text: qsTr("GİT")
                 enabled: row.canPosition && row.hasTarget && !row.axis.moving && !row.atTarget
@@ -241,7 +315,8 @@ Rectangle {
 
             JogButton {
                 objectName: "jog" + row.axis.name + "Minus"
-                Layout.preferredWidth: 92
+                Layout.minimumWidth: 88
+                Layout.maximumWidth: 88
                 Layout.preferredHeight: 68
                 machine: row.machine
                 axis: row.axis
@@ -251,7 +326,8 @@ Rectangle {
 
             JogButton {
                 objectName: "jog" + row.axis.name + "Plus"
-                Layout.preferredWidth: 92
+                Layout.minimumWidth: 88
+                Layout.maximumWidth: 88
                 Layout.preferredHeight: 68
                 machine: row.machine
                 axis: row.axis

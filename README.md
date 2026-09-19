@@ -30,17 +30,20 @@ Ekran yalnızca `IMachine`'i tanır. Gerçek makineye geçerken ekran kodu deği
 | Dosya | Görevi |
 |---|---|
 | `src/main.cpp` | Giriş noktası: makineyi oluşturur, ekranı yükler |
-| `src/machine/Axis.h` | Eksen: konum, hareket, referans ve limit durumu |
+| `src/machine/Axis.h` | Eksen: konum, hareket, referans, limit ve kilit durumu |
+| `src/machine/Actuator.h` | Hidrolik silindir: komut, sensör durumu ve kilit |
 | `src/machine/IMachine.h` | Makine sözleşmesi: ekranın tanıdığı tek sınıf |
 | `src/machine/SimMachine.*` | Sanal makine (demo) |
 | `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, süreler |
 | `qml/Main.qml` | Ana çerçeve: üst şerit, sol menü, sayfalar |
 | `qml/ProductionPage.qml` | Üretim sayfası (şimdilik referans arama) |
-| `qml/MotionPage.qml` | Hareket sayfası: jog ve hedef konuma gitme |
+| `qml/MotionPage.qml` | Hareket sayfası: jog, hedef konuma gitme ve hidrolik |
 | `qml/Theme.qml` | Renkler ve ölçüler |
 | `qml/HmiButton.qml` | Dokunmatik buton |
 | `qml/JogButton.qml` | Push buton mantığıyla jog butonu |
 | `qml/NavButton.qml` | Sol menü butonu |
 | `qml/ValueField.qml` | Dokununca tuş takımı açan değer alanı |
 | `qml/NumericKeypad.qml` | Dokunmatik sayı tuş takımı (aralık denetimli) |
+| `qml/PumpControl.qml` | Hidrolik pompa: START/STOP, durum ve basınç |
+| `qml/ActuatorButton.qml` | Kalıcı buton mantığıyla silindir kumandası |
 | `qml/AxisDisplay.qml` | Eksen konum göstergesi |

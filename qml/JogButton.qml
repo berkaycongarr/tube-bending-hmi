@@ -17,8 +17,10 @@ HmiButton {
     text: direction > 0 ? "+" : "−"
     font.pixelSize: 36
 
-    // Referans ararken ya da eksen o yöndeki limite dayanmışken kullanılamaz.
+    // Referans ararken, eksen kilitliyken (ör. mengene kapalı) ya da eksen o
+    // yöndeki limite dayanmışken kullanılamaz.
     enabled: machine.state !== Machine.Homing
+             && axis.interlock === Axis.NoInterlock
              && !(direction > 0 ? axis.atMaxLimit : axis.atMinLimit)
 
     // Geri bildirim: buton, eksen gerçekten hareket ediyorsa turuncu dolar.

@@ -8,6 +8,10 @@ Rectangle {
 
     required property Machine machine
 
+    // Mengene boruyu tutuyorsa X ve A kilitlidir; referans arama da kilitlenir.
+    readonly property bool clampLocked: page.machine.axisX.interlock !== Axis.NoInterlock
+                                        || page.machine.axisA.interlock !== Axis.NoInterlock
+
     radius: Theme.radius
     color: Theme.panel
     border.color: Theme.panelBorder
@@ -63,8 +67,19 @@ Rectangle {
             Layout.preferredHeight: 80
             text: page.machine.state === Machine.Ready ? qsTr("TEKRAR REFERANS ARA")
                                                        : qsTr("REFERANS ARA (HOME)")
-            enabled: page.machine.state !== Machine.Homing
+            enabled: page.machine.state !== Machine.Homing && !page.clampLocked
             onClicked: page.machine.startHoming()
+        }
+
+        // Referans aramada X ve A hareket eder; mengene boruyu tutuyorsa aranamaz.
+        Text {
+            objectName: "homeLockHint"
+            Layout.alignment: Qt.AlignHCenter
+            visible: page.clampLocked && page.machine.state !== Machine.Homing
+            text: qsTr("Kilitli: referans aramak için önce mengeneyi açın")
+            font.pixelSize: Theme.fontNormal
+            font.bold: true
+            color: Theme.activeText
         }
     }
 

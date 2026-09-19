@@ -15,7 +15,7 @@ Window {
     width: 1280
     height: 760
     minimumWidth: 1024
-    minimumHeight: 600
+    minimumHeight: 720
     visible: true
     title: qsTr("Boru Bükme Makinesi")
     color: Theme.background

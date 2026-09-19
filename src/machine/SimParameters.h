@@ -30,4 +30,12 @@ inline constexpr int TickIntervalMs = 20;   // döngü aralığı: saniyede 50 t
 inline constexpr double LatchSeconds = 0.5; // referans noktasında bekleme süresi (sn)
 inline constexpr int JogWatchdogMs = 300;   // bu süre "hâlâ basılı" gelmezse jog durur
 
+// Hidrolik
+inline constexpr double NominalPressure = 120.0;    // çalışma basıncı (bar)
+inline constexpr double PumpStartSeconds = 1.5;     // pompa çalışınca basıncın oluşma süresi
+inline constexpr double PumpStopSeconds = 1.0;      // pompa durunca basıncın düşme süresi
+inline constexpr double ClampTravelSeconds = 0.8;   // mengene kapanma / açılma süresi
+inline constexpr double MandrelTravelSeconds = 1.0; // malafa ileri / geri gitme süresi
+inline constexpr double ColletTravelSeconds = 0.5;  // pens kapanma / açılma süresi
+
 } // namespace SimParameters

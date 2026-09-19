@@ -34,10 +34,13 @@ qt_add_qml_module(appBoruHmi
         qml/JogButton.qml
         qml/ValueField.qml
         qml/NumericKeypad.qml
+        qml/PumpControl.qml
+        qml/ActuatorButton.qml
         qml/AxisDisplay.qml
         qml/ProductionPage.qml
         qml/MotionPage.qml
     SOURCES
+        src/machine/Actuator.h
         src/machine/Axis.h
         src/machine/IMachine.h
         src/machine/SimParameters.h

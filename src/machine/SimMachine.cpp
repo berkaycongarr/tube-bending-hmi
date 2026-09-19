@@ -23,6 +23,13 @@ SimMachine::SimMachine(QObject *parent)
     // sonra rotasyon (A), en son ilerletme arabası (X).
     m_homingOrder = { &m_axes[1], &m_axes[2], &m_axes[0] };
 
+    // Silindirler açılışta bekleme konumunda (açık / geride).
+    m_actuators = { SimActuator { clamp(), SimParameters::ClampTravelSeconds },
+                    SimActuator { mandrel(), SimParameters::MandrelTravelSeconds },
+                    SimActuator { collet(), SimParameters::ColletTravelSeconds } };
+
+    updateInterlocks();
+
     connect(&m_timer, &QTimer::timeout, this, &SimMachine::tick);
     m_timer.start(SimParameters::TickIntervalMs);
     m_clock.start();
@@ -35,6 +42,11 @@ SimMachine::SimMachine(QObject *parent)
 void SimMachine::startHoming()
 {
     if (state() == Homing)
+        return;
+
+    // Mengene boruyu tutuyorsa X ve A referansa gidemez.
+    updateInterlocks();
+    if (axisX()->interlock() != Axis::NoInterlock || axisA()->interlock() != Axis::NoInterlock)
         return;
 
     haltAllMotion();
@@ -50,29 +62,36 @@ void SimMachine::startHoming()
     m_latchTime = 0.0;
     m_homingOrder[0]->axis->setHoming(true);
     setState(Homing);
+    updateInterlocks();
 }
 
 void SimMachine::stop()
 {
-    // STOP her hareketi keser.
+    // STOP her eksen hareketini keser. Pompanın kendi START/STOP'u vardır;
+    // bu STOP pompayı ve silindirleri etkilemez.
     haltAllMotion();
 
-    if (state() != Homing)
-        return;
-
-    // Referans arama yarıda kesildi: makine referanssız sayılır.
-    Axis *axis = m_homingOrder[m_homingIndex]->axis;
-    axis->setHoming(false);
-    axis->setMoving(false);
-    m_homingIndex = -1;
-    m_latchTime = 0.0;
-    setState(NotHomed);
+    if (state() == Homing) {
+        // Referans arama yarıda kesildi: makine referanssız sayılır.
+        Axis *axis = m_homingOrder[m_homingIndex]->axis;
+        axis->setHoming(false);
+        axis->setMoving(false);
+        m_homingIndex = -1;
+        m_latchTime = 0.0;
+        setState(NotHomed);
+    }
+    updateInterlocks();
 }
 
 void SimMachine::startJog(Axis *axis, int direction, bool fast)
 {
     SimAxis *sim = simAxis(axis);
     if (!sim || direction == 0 || state() == Homing)
+        return;
+
+    // Kilitli eksen (ör. mengene boruyu tutarken X ya da A) hareket edemez.
+    updateInterlocks();
+    if (axis->interlock() != Axis::NoInterlock)
         return;
 
     // Eksen o yöndeki limite dayanmışsa o yöne gidemez.
@@ -112,6 +131,11 @@ void SimMachine::moveTo(Axis *axis, double target)
     if (!sim || state() != Ready || !axis->isHomed())
         return;
 
+    // Kilitli eksen hareket edemez.
+    updateInterlocks();
+    if (axis->interlock() != Axis::NoInterlock)
+        return;
+
     // Ekran aralık dışı değeri zaten kabul etmez; makine yine de kendisi kontrol
     // eder. Gerçek PLC de ekrandan gelen değere körü körüne güvenmez.
     if (!std::isfinite(target) || target < sim->params.minPosition || target > sim->params.maxPosition)
@@ -123,6 +147,32 @@ void SimMachine::moveTo(Axis *axis, double target)
     sim->positioning = true;
 }
 
+void SimMachine::startPump()
+{
+    // START mühürlenir: buton bırakılsa da pompa çalışmaya devam eder.
+    m_pumpCommand = true;
+    updatePump(0.0);
+}
+
+void SimMachine::stopPump()
+{
+    // STOP mühürü çözer: pompa durur, basınç düşer.
+    m_pumpCommand = false;
+    updatePump(0.0);
+}
+
+void SimMachine::setActuator(Actuator *actuator, bool on)
+{
+    // Kilitliyse (basınç yok ya da eksenler hareket ediyor) komut reddedilir.
+    updateInterlocks();
+    if (!simActuator(actuator) || actuator->interlock() != Actuator::NoInterlock)
+        return;
+
+    // Komut makinede kalır (kalıcı buton); silindir yolunu döngü içinde alır.
+    actuator->setCommand(on);
+    updateInterlocks();
+}
+
 // ---------------------------------------------------------------------------
 // Döngü
 // ---------------------------------------------------------------------------
@@ -130,13 +180,89 @@ void SimMachine::moveTo(Axis *axis, double target)
 void SimMachine::tick()
 {
     // Önceki turdan bu yana geçen gerçek süre (saniye). Program bir an
-    // takılırsa eksen ileri zıplamasın diye en fazla 0.1 sn alıyoruz.
+    // takılırsa her şey ileri zıplamasın diye en fazla 0.1 sn alıyoruz.
     const double dt = qMin(m_clock.restart() / 1000.0, 0.1);
+
+    // PLC gibi: önce girişleri ve hidroliği güncelle, kilitleri hesapla,
+    // sonra eksenleri hareket ettir ve kilitleri yeniden hesapla.
+    updatePump(dt);
+    updateActuators(dt);
+    updateInterlocks();
 
     if (state() == Homing)
         updateHoming(dt);
     else
         updateManualMotion(dt);
+
+    updateInterlocks();
+}
+
+void SimMachine::updatePump(double dt)
+{
+    // Basınç, pompa çalışınca yükselir, durunca düşer.
+    const double nominal = SimParameters::NominalPressure;
+    double p = pressure();
+
+    if (m_pumpCommand) {
+        p = qMin(nominal, p + nominal / SimParameters::PumpStartSeconds * dt);
+        setPumpState(p >= nominal ? PumpRunning : PumpStarting);
+    } else {
+        p = qMax(0.0, p - nominal / SimParameters::PumpStopSeconds * dt);
+        setPumpState(p <= 0.0 ? PumpStopped : PumpStopping);
+    }
+    setPressure(p);
+}
+
+void SimMachine::updateActuators(double dt)
+{
+    // Silindirler yalnızca basınç tamken hareket eder. Pompa yolda durursa
+    // silindir olduğu yerde kalır, basınç gelince yoluna devam eder.
+    const bool pressureOk = pumpState() == PumpRunning;
+
+    for (SimActuator &sim : m_actuators) {
+        Actuator *actuator = sim.actuator;
+        const double target = actuator->command() ? 1.0 : 0.0;
+
+        if (pressureOk && sim.progress != target) {
+            const double step = dt / sim.travelSeconds;
+            sim.progress = target > sim.progress ? qMin(target, sim.progress + step)
+                                                 : qMax(target, sim.progress - step);
+        }
+
+        // Sensörler yalnızca uç konumları bilir: iki ucun arasındaysa silindir yoldadır.
+        if (sim.progress >= 1.0)
+            actuator->setState(Actuator::On);
+        else if (sim.progress <= 0.0)
+            actuator->setState(Actuator::Off);
+        else
+            actuator->setState(actuator->command() ? Actuator::TurningOn : Actuator::TurningOff);
+    }
+}
+
+void SimMachine::updateInterlocks()
+{
+    const bool pumpOk = pumpState() == PumpRunning;
+
+    // Mengene boruyu tutuyor mu? Kapatma komutu verildiği an ya da tam açılana
+    // kadar evet sayılır.
+    const bool clampHolding = clamp()->command() || clamp()->state() != Actuator::Off;
+
+    // X ya da A hareket ediyor mu (referans arama dahil)?
+    const bool axesBusy = state() == Homing || axisX()->isMoving() || axisA()->isMoving();
+
+    // Kural 1: mengene boruyu tutarken X (ilerletme) ve A (rotasyon) hareket edemez;
+    // boru kıskaçtayken çekilir ya da burulur. B (büküm) serbesttir.
+    const Axis::Interlock axisLock = clampHolding ? Axis::ClampClosed : Axis::NoInterlock;
+    axisX()->setInterlock(axisLock);
+    axisA()->setInterlock(axisLock);
+
+    // Kural 2: basınç yoksa hiçbir silindir kumanda edilemez.
+    // Kural 3: X ya da A hareket ederken mengene kumanda edilemez.
+    clamp()->setInterlock(!pumpOk ? Actuator::PumpOff
+                          : axesBusy ? Actuator::AxesMoving
+                                     : Actuator::NoInterlock);
+    mandrel()->setInterlock(pumpOk ? Actuator::NoInterlock : Actuator::PumpOff);
+    collet()->setInterlock(pumpOk ? Actuator::NoInterlock : Actuator::PumpOff);
 }
 
 void SimMachine::updateHoming(double dt)
@@ -188,6 +314,12 @@ void SimMachine::updateManualMotion(double dt)
 {
     for (SimAxis &sim : m_axes) {
         Axis *axis = sim.axis;
+
+        // Güvenlik: kilitlenmiş eksen hareket ediyorsa hemen durdur.
+        if (axis->interlock() != Axis::NoInterlock && (sim.positioning || sim.jogDirection != 0)) {
+            haltMotion(sim);
+            continue;
+        }
 
         // Konuma git: hedefe sabit hızla ilerle, varınca tam hedefte dur.
         if (sim.positioning) {
@@ -245,6 +377,15 @@ SimMachine::SimAxis *SimMachine::simAxis(Axis *axis)
 {
     for (SimAxis &sim : m_axes) {
         if (sim.axis == axis)
+            return &sim;
+    }
+    return nullptr;
+}
+
+SimMachine::SimActuator *SimMachine::simActuator(Actuator *actuator)
+{
+    for (SimActuator &sim : m_actuators) {
+        if (sim.actuator == actuator)
             return &sim;
     }
     return nullptr;
