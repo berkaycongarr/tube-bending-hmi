@@ -32,6 +32,8 @@ qt_add_qml_module(appBoruHmi
         qml/HmiButton.qml
         qml/NavButton.qml
         qml/JogButton.qml
+        qml/ValueField.qml
+        qml/NumericKeypad.qml
         qml/AxisDisplay.qml
         qml/ProductionPage.qml
         qml/MotionPage.qml

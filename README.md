@@ -36,9 +36,11 @@ Ekran yalnızca `IMachine`'i tanır. Gerçek makineye geçerken ekran kodu deği
 | `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, süreler |
 | `qml/Main.qml` | Ana çerçeve: üst şerit, sol menü, sayfalar |
 | `qml/ProductionPage.qml` | Üretim sayfası (şimdilik referans arama) |
-| `qml/MotionPage.qml` | Hareket sayfası: eksenleri elle sürme (jog) |
+| `qml/MotionPage.qml` | Hareket sayfası: jog ve hedef konuma gitme |
 | `qml/Theme.qml` | Renkler ve ölçüler |
 | `qml/HmiButton.qml` | Dokunmatik buton |
 | `qml/JogButton.qml` | Push buton mantığıyla jog butonu |
 | `qml/NavButton.qml` | Sol menü butonu |
+| `qml/ValueField.qml` | Dokununca tuş takımı açan değer alanı |
+| `qml/NumericKeypad.qml` | Dokunmatik sayı tuş takımı (aralık denetimli) |
 | `qml/AxisDisplay.qml` | Eksen konum göstergesi |

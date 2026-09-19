@@ -27,6 +27,7 @@ public:
     void startJog(Axis *axis, int direction, bool fast) override;
     void keepJogAlive(Axis *axis) override;
     void stopJog(Axis *axis) override;
+    void moveTo(Axis *axis, double target) override;
 
 private:
     // Sanal makinenin her eksen için tuttuğu bilgiler.
@@ -44,21 +45,23 @@ private:
         int jogDirection = 0;       // -1: geri, +1: ileri, 0: jog yok
         bool jogFast = false;
         QDeadlineTimer jogDeadline; // bekçi: bu süre dolarsa jog durur
+        bool positioning = false;   // "konuma git" sürüyor mu?
+        double moveTarget = 0.0;    // gidilen hedef konum
     };
 
-    void tick();                  // döngünün bir turu
-    void updateHoming(double dt); // referans aramayı dt saniye ilerlet
-    void updateJogs(double dt);   // süren jog'ları dt saniye ilerlet
+    void tick();                        // döngünün bir turu
+    void updateHoming(double dt);       // referans aramayı dt saniye ilerlet
+    void updateManualMotion(double dt); // jog ve konuma gitmeyi dt saniye ilerlet
 
-    SimAxis *simAxis(Axis *axis); // bir Axis'e ait kaydı bul
-    void haltJog(SimAxis &sim);
-    void haltAllJogs();
+    SimAxis *simAxis(Axis *axis);       // bir Axis'e ait kaydı bul
+    void haltMotion(SimAxis &sim);      // eksenin elle hareketini (jog, konumlama) durdur
+    void haltAllMotion();
     void updateLimitState(SimAxis &sim);
 
-    QTimer m_timer;                         // döngüyü tetikleyen saat
-    QElapsedTimer m_clock;                  // iki tur arasında geçen gerçek süre
-    std::array<SimAxis, 3> m_axes;          // X, B, A
+    QTimer m_timer;                            // döngüyü tetikleyen saat
+    QElapsedTimer m_clock;                     // iki tur arasında geçen gerçek süre
+    std::array<SimAxis, 3> m_axes;             // X, B, A
     std::array<SimAxis *, 3> m_homingOrder {}; // referans arama sırası
-    int m_homingIndex = -1;                 // şu an referans arayan eksenin sırası (-1: yok)
-    double m_latchTime = 0.0;               // referans noktasında geçen bekleme süresi (sn)
+    int m_homingIndex = -1;                    // şu an referans arayan eksenin sırası (-1: yok)
+    double m_latchTime = 0.0;                  // referans noktasında geçen bekleme süresi (sn)
 };

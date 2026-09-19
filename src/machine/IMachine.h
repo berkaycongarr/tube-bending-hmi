@@ -62,6 +62,10 @@ public:
     Q_INVOKABLE virtual void keepJogAlive(Axis *axis) = 0;
     Q_INVOKABLE virtual void stopJog(Axis *axis) = 0;
 
+    // Konuma git ("değer gir"): ekseni verilen mutlak konuma götürür.
+    // Yalnızca makine HAZIR iken çalışır; limit dışındaki hedefi makine reddeder.
+    Q_INVOKABLE virtual void moveTo(Axis *axis, double target) = 0;
+
 signals:
     void stateChanged();
 

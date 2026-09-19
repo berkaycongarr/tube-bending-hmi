@@ -14,7 +14,7 @@ Rectangle {
 
     ColumnLayout {
         anchors.centerIn: parent
-        width: Math.min(parent.width - 64, 620)
+        width: Math.min(parent.width - 64, 680)
         spacing: 14
 
         Text {
@@ -27,7 +27,8 @@ Rectangle {
         Text {
             Layout.fillWidth: true
             Layout.bottomMargin: 6
-            text: qsTr("Eksenler sırayla referans noktasına gider ve orada sıfırlanır.")
+            text: qsTr("Eksenler sırayla referans noktasına gider. Orada eksene bilinen bir "
+                       + "değer yazılır ve gerçek konumu belirlenmiş olur.")
             font.pixelSize: Theme.fontNormal
             color: Theme.textMuted
             wrapMode: Text.WordWrap
@@ -116,7 +117,16 @@ Rectangle {
                 elide: Text.ElideRight
             }
 
+            // Referans noktasında eksene yazılacak değer
             Text {
+                text: "→ " + step.axis.homePosition.toFixed(2) + (step.axis.rotary ? "°" : " mm")
+                font.pixelSize: Theme.fontSmall
+                color: Theme.textMuted
+            }
+
+            Text {
+                Layout.preferredWidth: 76
+                horizontalAlignment: Text.AlignRight
                 text: step.axis.homed ? qsTr("Tamam")
                                       : step.axis.homing ? qsTr("Aranıyor…") : qsTr("Bekliyor")
                 font.pixelSize: Theme.fontNormal

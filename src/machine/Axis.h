@@ -9,9 +9,9 @@
 //   B: büküm      - büküm kolunu çevirir (derece)
 //   A: rotasyon   - boruyu kendi ekseni etrafında döndürür (derece)
 //
-// Axis yalnızca durumu tutar: konum, hareket ediyor mu, referans durumu,
-// limitler. Ekseni hareket ettiren ve bu değerleri güncelleyen makinedir
-// (demoda SimMachine, gerçekte PLC).
+// Axis yalnızca durumu ve parametreleri tutar: konum, hareket ediyor mu,
+// referans durumu, limitler, hızlar. Ekseni hareket ettiren ve bu değerleri
+// güncelleyen makinedir (demoda SimMachine, gerçekte PLC).
 class Axis : public QObject
 {
     Q_OBJECT
@@ -24,8 +24,11 @@ class Axis : public QObject
     Q_PROPERTY(bool moving READ isMoving NOTIFY movingChanged)
     Q_PROPERTY(bool homing READ isHoming NOTIFY homingChanged)
     Q_PROPERTY(bool homed READ isHomed NOTIFY homedChanged)
-    Q_PROPERTY(double minPosition READ minPosition NOTIFY limitsChanged)
-    Q_PROPERTY(double maxPosition READ maxPosition NOTIFY limitsChanged)
+    Q_PROPERTY(double minPosition READ minPosition NOTIFY parametersChanged)
+    Q_PROPERTY(double maxPosition READ maxPosition NOTIFY parametersChanged)
+    Q_PROPERTY(double homePosition READ homePosition NOTIFY parametersChanged)
+    Q_PROPERTY(double jogSpeedSlow READ jogSpeedSlow NOTIFY parametersChanged)
+    Q_PROPERTY(double jogSpeedFast READ jogSpeedFast NOTIFY parametersChanged)
     Q_PROPERTY(bool atMinLimit READ atMinLimit NOTIFY limitStateChanged)
     Q_PROPERTY(bool atMaxLimit READ atMaxLimit NOTIFY limitStateChanged)
 
@@ -43,10 +46,13 @@ public:
     bool isMoving() const { return m_moving; }          // şu an hareket ediyor mu?
     bool isHoming() const { return m_homing; }          // şu an referans arıyor mu?
     bool isHomed() const { return m_homed; }            // referansı bulundu mu?
-    double minPosition() const { return m_minPosition; } // yazılım limiti, alt
-    double maxPosition() const { return m_maxPosition; } // yazılım limiti, üst
-    bool atMinLimit() const { return m_atMinLimit; }    // alt limite dayandı mı?
-    bool atMaxLimit() const { return m_atMaxLimit; }    // üst limite dayandı mı?
+    double minPosition() const { return m_minPosition; }   // yazılım limiti, alt
+    double maxPosition() const { return m_maxPosition; }   // yazılım limiti, üst
+    double homePosition() const { return m_homePosition; } // referansta yazılan değer
+    double jogSpeedSlow() const { return m_jogSpeedSlow; } // jog hızı, yavaş (birim/sn)
+    double jogSpeedFast() const { return m_jogSpeedFast; } // jog hızı, hızlı (birim/sn)
+    bool atMinLimit() const { return m_atMinLimit; }       // alt limite dayandı mı?
+    bool atMaxLimit() const { return m_atMaxLimit; }       // üst limite dayandı mı?
 
     // Aşağıdaki fonksiyonlar QML'den çağrılamaz; yalnızca makine sınıfları kullanır.
     // Değer gerçekten değiştiyse sinyal yayılır; ekran da sadece o zaman güncellenir.
@@ -88,7 +94,24 @@ public:
             return;
         m_minPosition = minPosition;
         m_maxPosition = maxPosition;
-        emit limitsChanged();
+        emit parametersChanged();
+    }
+
+    void setHomePosition(double homePosition)
+    {
+        if (m_homePosition == homePosition)
+            return;
+        m_homePosition = homePosition;
+        emit parametersChanged();
+    }
+
+    void setJogSpeeds(double slow, double fast)
+    {
+        if (m_jogSpeedSlow == slow && m_jogSpeedFast == fast)
+            return;
+        m_jogSpeedSlow = slow;
+        m_jogSpeedFast = fast;
+        emit parametersChanged();
     }
 
     void setLimitState(bool atMinLimit, bool atMaxLimit)
@@ -105,7 +128,7 @@ signals:
     void movingChanged();
     void homingChanged();
     void homedChanged();
-    void limitsChanged();
+    void parametersChanged();
     void limitStateChanged();
 
 private:
@@ -117,6 +140,9 @@ private:
     bool m_homed = false;
     double m_minPosition = 0.0;
     double m_maxPosition = 0.0;
+    double m_homePosition = 0.0;
+    double m_jogSpeedSlow = 0.0;
+    double m_jogSpeedFast = 0.0;
     bool m_atMinLimit = false;
     bool m_atMaxLimit = false;
 };

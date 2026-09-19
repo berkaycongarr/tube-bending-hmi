@@ -9,11 +9,13 @@ SimMachine::SimMachine(QObject *parent)
                SimAxis { axisB(), SimParameters::B },
                SimAxis { axisA(), SimParameters::A } };
 
-    // Limitleri ve açılış konumlarını eksenlere yaz. Açılış konumu, makine
+    // Parametreleri ve açılış konumlarını eksenlere yaz. Açılış konumu, makine
     // kapatılmadan önce eksenin kaldığı yer gibi düşünülebilir; referans
     // aranana kadar bu değere güvenilmez.
     for (SimAxis &sim : m_axes) {
         sim.axis->setLimits(sim.params.minPosition, sim.params.maxPosition);
+        sim.axis->setHomePosition(sim.params.homePosition);
+        sim.axis->setJogSpeeds(sim.params.jogSlow, sim.params.jogFast);
         sim.axis->setPosition(sim.params.startPosition);
     }
 
@@ -35,7 +37,7 @@ void SimMachine::startHoming()
     if (state() == Homing)
         return;
 
-    haltAllJogs();
+    haltAllMotion();
 
     // Referans baştan aranır: tüm eksenlerin eski referansı geçersiz sayılır.
     for (SimAxis &sim : m_axes) {
@@ -53,7 +55,7 @@ void SimMachine::startHoming()
 void SimMachine::stop()
 {
     // STOP her hareketi keser.
-    haltAllJogs();
+    haltAllMotion();
 
     if (state() != Homing)
         return;
@@ -78,6 +80,8 @@ void SimMachine::startJog(Axis *axis, int direction, bool fast)
     if ((dir > 0 && axis->atMaxLimit()) || (dir < 0 && axis->atMinLimit()))
         return;
 
+    // Yeni komut eskisinin yerini alır: süren bir "konuma git" varsa iptal olur.
+    sim->positioning = false;
     sim->jogDirection = dir;
     // Referanssız eksenin konumu bilinmez; güvenlik için yalnızca yavaş hız.
     sim->jogFast = fast && axis->isHomed();
@@ -95,8 +99,28 @@ void SimMachine::keepJogAlive(Axis *axis)
 
 void SimMachine::stopJog(Axis *axis)
 {
-    if (SimAxis *sim = simAxis(axis))
-        haltJog(*sim);
+    SimAxis *sim = simAxis(axis);
+    if (sim && sim->jogDirection != 0)
+        haltMotion(*sim);
+}
+
+void SimMachine::moveTo(Axis *axis, double target)
+{
+    SimAxis *sim = simAxis(axis);
+
+    // Konuma gitmek için 0'ın nerede olduğunu bilmek gerekir: makine HAZIR olmalı.
+    if (!sim || state() != Ready || !axis->isHomed())
+        return;
+
+    // Ekran aralık dışı değeri zaten kabul etmez; makine yine de kendisi kontrol
+    // eder. Gerçek PLC de ekrandan gelen değere körü körüne güvenmez.
+    if (!std::isfinite(target) || target < sim->params.minPosition || target > sim->params.maxPosition)
+        return;
+
+    // Yeni komut eskisinin yerini alır: süren bir jog varsa iptal olur.
+    sim->jogDirection = 0;
+    sim->moveTarget = target;
+    sim->positioning = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,7 +136,7 @@ void SimMachine::tick()
     if (state() == Homing)
         updateHoming(dt);
     else
-        updateJogs(dt);
+        updateManualMotion(dt);
 }
 
 void SimMachine::updateHoming(double dt)
@@ -120,14 +144,19 @@ void SimMachine::updateHoming(double dt)
     SimAxis &sim = *m_homingOrder[m_homingIndex];
     Axis *axis = sim.axis;
     const double position = axis->position();
-    const double distance = std::abs(position);
+    const double home = sim.params.homePosition;
+    const double distance = std::abs(home - position);
 
-    // 1) Referans noktasına (0) doğru ilerle: uzaktaysa hızlı, yakınsa yavaş.
+    // 1) Referans noktasına doğru ilerle: uzaktaysa hızlı, yakınsa yavaş.
     if (distance > 0.0) {
         const double speed = distance > sim.params.homingSlowZone ? sim.params.homingFast
                                                                   : sim.params.homingSlow;
-        const double step = qMin(speed * dt, distance);
-        axis->setPosition(position > 0 ? position - step : position + step);
+        const double step = speed * dt;
+        // Son adımda tam hedefe otur: ondalıklı hesap küçük bir kalıntı bırakmasın.
+        if (step >= distance)
+            axis->setPosition(home);
+        else
+            axis->setPosition(position < home ? position + step : position - step);
         axis->setMoving(true);
         return;
     }
@@ -138,8 +167,9 @@ void SimMachine::updateHoming(double dt)
     if (m_latchTime < SimParameters::LatchSeconds)
         return;
 
-    // 3) Referans bulundu: eksen referanslı olur.
+    // 3) Referans bulundu: eksene referans değeri yazılır, eksen referanslı olur.
     m_latchTime = 0.0;
+    axis->setPosition(home);
     axis->setHoming(false);
     axis->setHomed(true);
     updateLimitState(sim);
@@ -154,24 +184,41 @@ void SimMachine::updateHoming(double dt)
     }
 }
 
-void SimMachine::updateJogs(double dt)
+void SimMachine::updateManualMotion(double dt)
 {
     for (SimAxis &sim : m_axes) {
+        Axis *axis = sim.axis;
+
+        // Konuma git: hedefe sabit hızla ilerle, varınca tam hedefte dur.
+        if (sim.positioning) {
+            const double remaining = sim.moveTarget - axis->position();
+            const double step = sim.params.moveSpeed * dt;
+            if (std::abs(remaining) <= step) {
+                axis->setPosition(sim.moveTarget);
+                haltMotion(sim);
+            } else {
+                axis->setPosition(axis->position() + (remaining > 0 ? step : -step));
+                axis->setMoving(true);
+            }
+            updateLimitState(sim);
+            continue;
+        }
+
         if (sim.jogDirection == 0)
             continue;
 
         // Bekçi: ekran belirli bir süre "hâlâ basılı" demediyse dur.
         if (sim.jogDeadline.hasExpired()) {
-            haltJog(sim);
+            haltMotion(sim);
             continue;
         }
 
         const double speed = sim.jogFast ? sim.params.jogFast : sim.params.jogSlow;
-        double position = sim.axis->position() + sim.jogDirection * speed * dt;
+        double position = axis->position() + sim.jogDirection * speed * dt;
 
         // Yazılım limitleri yalnızca referanslı eksende geçerli.
         bool reachedLimit = false;
-        if (sim.axis->isHomed()) {
+        if (axis->isHomed()) {
             if (position >= sim.params.maxPosition) {
                 position = sim.params.maxPosition;
                 reachedLimit = true;
@@ -181,12 +228,12 @@ void SimMachine::updateJogs(double dt)
             }
         }
 
-        sim.axis->setPosition(position);
-        sim.axis->setMoving(true);
+        axis->setPosition(position);
+        axis->setMoving(true);
         updateLimitState(sim);
 
         if (reachedLimit)
-            haltJog(sim);
+            haltMotion(sim);
     }
 }
 
@@ -203,16 +250,17 @@ SimMachine::SimAxis *SimMachine::simAxis(Axis *axis)
     return nullptr;
 }
 
-void SimMachine::haltJog(SimAxis &sim)
+void SimMachine::haltMotion(SimAxis &sim)
 {
     sim.jogDirection = 0;
+    sim.positioning = false;
     sim.axis->setMoving(false);
 }
 
-void SimMachine::haltAllJogs()
+void SimMachine::haltAllMotion()
 {
     for (SimAxis &sim : m_axes)
-        haltJog(sim);
+        haltMotion(sim);
 }
 
 void SimMachine::updateLimitState(SimAxis &sim)
