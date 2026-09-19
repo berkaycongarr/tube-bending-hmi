@@ -9,8 +9,9 @@
 //   B: büküm      - büküm kolunu çevirir (derece)
 //   A: rotasyon   - boruyu kendi ekseni etrafında döndürür (derece)
 //
-// Axis yalnızca durumu tutar: konum, referans arıyor mu, referansı bulundu mu.
-// Ekseni hareket ettiren makinedir (demoda SimMachine, gerçekte PLC).
+// Axis yalnızca durumu tutar: konum, hareket ediyor mu, referans durumu,
+// limitler. Ekseni hareket ettiren ve bu değerleri güncelleyen makinedir
+// (demoda SimMachine, gerçekte PLC).
 class Axis : public QObject
 {
     Q_OBJECT
@@ -20,8 +21,13 @@ class Axis : public QObject
     Q_PROPERTY(QString name READ name CONSTANT)
     Q_PROPERTY(bool rotary READ isRotary CONSTANT)
     Q_PROPERTY(double position READ position NOTIFY positionChanged)
+    Q_PROPERTY(bool moving READ isMoving NOTIFY movingChanged)
     Q_PROPERTY(bool homing READ isHoming NOTIFY homingChanged)
     Q_PROPERTY(bool homed READ isHomed NOTIFY homedChanged)
+    Q_PROPERTY(double minPosition READ minPosition NOTIFY limitsChanged)
+    Q_PROPERTY(double maxPosition READ maxPosition NOTIFY limitsChanged)
+    Q_PROPERTY(bool atMinLimit READ atMinLimit NOTIFY limitStateChanged)
+    Q_PROPERTY(bool atMaxLimit READ atMaxLimit NOTIFY limitStateChanged)
 
 public:
     Axis(const QString &name, bool rotary, QObject *parent = nullptr)
@@ -32,10 +38,15 @@ public:
     }
 
     QString name() const { return m_name; }
-    bool isRotary() const { return m_rotary; }      // true: derece, false: mm
-    double position() const { return m_position; }  // anlık konum
-    bool isHoming() const { return m_homing; }      // şu an referans arıyor mu?
-    bool isHomed() const { return m_homed; }        // referansı bulundu mu?
+    bool isRotary() const { return m_rotary; }          // true: derece, false: mm
+    double position() const { return m_position; }      // anlık konum
+    bool isMoving() const { return m_moving; }          // şu an hareket ediyor mu?
+    bool isHoming() const { return m_homing; }          // şu an referans arıyor mu?
+    bool isHomed() const { return m_homed; }            // referansı bulundu mu?
+    double minPosition() const { return m_minPosition; } // yazılım limiti, alt
+    double maxPosition() const { return m_maxPosition; } // yazılım limiti, üst
+    bool atMinLimit() const { return m_atMinLimit; }    // alt limite dayandı mı?
+    bool atMaxLimit() const { return m_atMaxLimit; }    // üst limite dayandı mı?
 
     // Aşağıdaki fonksiyonlar QML'den çağrılamaz; yalnızca makine sınıfları kullanır.
     // Değer gerçekten değiştiyse sinyal yayılır; ekran da sadece o zaman güncellenir.
@@ -45,6 +56,14 @@ public:
             return;
         m_position = position;
         emit positionChanged();
+    }
+
+    void setMoving(bool moving)
+    {
+        if (m_moving == moving)
+            return;
+        m_moving = moving;
+        emit movingChanged();
     }
 
     void setHoming(bool homing)
@@ -63,15 +82,41 @@ public:
         emit homedChanged();
     }
 
+    void setLimits(double minPosition, double maxPosition)
+    {
+        if (m_minPosition == minPosition && m_maxPosition == maxPosition)
+            return;
+        m_minPosition = minPosition;
+        m_maxPosition = maxPosition;
+        emit limitsChanged();
+    }
+
+    void setLimitState(bool atMinLimit, bool atMaxLimit)
+    {
+        if (m_atMinLimit == atMinLimit && m_atMaxLimit == atMaxLimit)
+            return;
+        m_atMinLimit = atMinLimit;
+        m_atMaxLimit = atMaxLimit;
+        emit limitStateChanged();
+    }
+
 signals:
     void positionChanged();
+    void movingChanged();
     void homingChanged();
     void homedChanged();
+    void limitsChanged();
+    void limitStateChanged();
 
 private:
     const QString m_name;
     const bool m_rotary;
     double m_position = 0.0;
+    bool m_moving = false;
     bool m_homing = false;
     bool m_homed = false;
+    double m_minPosition = 0.0;
+    double m_maxPosition = 0.0;
+    bool m_atMinLimit = false;
+    bool m_atMaxLimit = false;
 };

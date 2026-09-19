@@ -30,10 +30,15 @@ qt_add_qml_module(appBoruHmi
         qml/Main.qml
         qml/Theme.qml
         qml/HmiButton.qml
+        qml/NavButton.qml
+        qml/JogButton.qml
         qml/AxisDisplay.qml
+        qml/ProductionPage.qml
+        qml/MotionPage.qml
     SOURCES
         src/machine/Axis.h
         src/machine/IMachine.h
+        src/machine/SimParameters.h
         src/machine/SimMachine.h
         src/machine/SimMachine.cpp
 )

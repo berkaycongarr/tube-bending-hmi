@@ -1,13 +1,16 @@
 import QtQuick
 import QtQuick.Layouts
 
-// Ana ekran: üstte durum ve eksen konumları, ortada referans arama,
-// altta çalışma modu ve saat.
+// Ana ekran: üstte durum, eksen konumları ve STOP; solda menü; ortada seçili
+// sayfa; altta çalışma modu ve saat. Üst şerit her sayfada görünür kalır.
 Window {
     id: root
 
     // main.cpp tarafından verilen makine nesnesi (demoda SimMachine).
     required property Machine machine
+
+    // Seçili sayfa: 0 = Üretim, 1 = Hareket
+    property int currentPage: 0
 
     width: 1280
     height: 760
@@ -140,66 +143,58 @@ Window {
             }
         }
 
-        // Orta alan: referans arama
-        Rectangle {
+        // Orta bölüm: solda menü, sağda seçili sayfa
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: Theme.radius
-            color: Theme.panel
-            border.color: Theme.panelBorder
+            spacing: 16
 
-            ColumnLayout {
-                anchors.centerIn: parent
-                width: Math.min(parent.width - 64, 620)
-                spacing: 14
+            // Sol menü: sayfa adları mevcut makine ekranındakilerle aynı.
+            Rectangle {
+                Layout.fillHeight: true
+                Layout.preferredWidth: 160
+                radius: Theme.radius
+                color: Theme.panel
+                border.color: Theme.panelBorder
 
-                Text {
-                    text: qsTr("Referans Arama")
-                    font.pixelSize: Theme.fontLarge
-                    font.bold: true
-                    color: Theme.text
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    spacing: 6
+
+                    NavButton {
+                        objectName: "navProduction"
+                        Layout.fillWidth: true
+                        text: qsTr("ÜRETİM")
+                        selected: root.currentPage === 0
+                        onClicked: root.currentPage = 0
+                    }
+
+                    NavButton {
+                        objectName: "navMotion"
+                        Layout.fillWidth: true
+                        text: qsTr("HAREKET")
+                        selected: root.currentPage === 1
+                        onClicked: root.currentPage = 1
+                    }
+
+                    Item {
+                        Layout.fillHeight: true
+                    }
+                }
+            }
+
+            StackLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                currentIndex: root.currentPage
+
+                ProductionPage {
+                    machine: root.machine
                 }
 
-                Text {
-                    Layout.fillWidth: true
-                    Layout.bottomMargin: 6
-                    text: qsTr("Eksenler sırayla referans noktasına gider ve orada sıfırlanır.")
-                    font.pixelSize: Theme.fontNormal
-                    color: Theme.textMuted
-                    wrapMode: Text.WordWrap
-                }
-
-                HomingStep {
-                    Layout.fillWidth: true
-                    order: 1
-                    axis: root.machine.axisB
-                    title: qsTr("Büküm kolu geri çekilir")
-                }
-
-                HomingStep {
-                    Layout.fillWidth: true
-                    order: 2
-                    axis: root.machine.axisA
-                    title: qsTr("Boru rotasyonu sıfırlanır")
-                }
-
-                HomingStep {
-                    Layout.fillWidth: true
-                    order: 3
-                    axis: root.machine.axisX
-                    title: qsTr("İlerletme arabası referansa gider")
-                }
-
-                HmiButton {
-                    objectName: "homeButton"
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.topMargin: 10
-                    Layout.preferredWidth: 360
-                    Layout.preferredHeight: 80
-                    text: root.machine.state === Machine.Ready ? qsTr("TEKRAR REFERANS ARA")
-                                                               : qsTr("REFERANS ARA (HOME)")
-                    enabled: root.machine.state !== Machine.Homing
-                    onClicked: root.machine.startHoming()
+                MotionPage {
+                    machine: root.machine
                 }
             }
         }
@@ -248,64 +243,5 @@ Window {
         repeat: true
         triggeredOnStart: true
         onTriggered: clock.text = Qt.formatDateTime(new Date(), "dd.MM.yyyy  HH:mm:ss")
-    }
-
-    // Referans arama adımlarından biri: sıra numarası, eksen, açıklama, durum.
-    component HomingStep: Rectangle {
-        id: step
-
-        required property int order
-        required property Axis axis
-        required property string title
-
-        implicitHeight: 52
-        radius: Theme.radius
-        color: step.axis.homing ? "#1ac77800" : "transparent"
-        border.color: step.axis.homing ? Theme.active : Theme.panelBorder
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 12
-            anchors.rightMargin: 16
-            spacing: 14
-
-            Rectangle {
-                implicitWidth: 30
-                implicitHeight: 30
-                radius: 15
-                color: step.axis.homed ? Theme.ok : step.axis.homing ? Theme.active : Theme.idle
-
-                Text {
-                    anchors.centerIn: parent
-                    text: step.axis.homed ? "✓" : step.order.toString()
-                    font.pixelSize: Theme.fontSmall
-                    font.bold: true
-                    color: "white"
-                }
-            }
-
-            Text {
-                text: step.axis.name
-                font.pixelSize: 18
-                font.bold: true
-                color: Theme.text
-            }
-
-            Text {
-                Layout.fillWidth: true
-                text: step.title
-                font.pixelSize: Theme.fontNormal
-                color: Theme.text
-                elide: Text.ElideRight
-            }
-
-            Text {
-                text: step.axis.homed ? qsTr("Tamam")
-                                      : step.axis.homing ? qsTr("Aranıyor…") : qsTr("Bekliyor")
-                font.pixelSize: Theme.fontNormal
-                font.bold: step.axis.homing
-                color: step.axis.homed ? Theme.ok : Theme.textMuted
-            }
-        }
     }
 }

@@ -14,8 +14,9 @@ Rectangle {
     implicitHeight: 72
     radius: Theme.radius
     color: Theme.panel
-    border.color: box.axis.homing ? Theme.active : Theme.panelBorder
-    border.width: box.axis.homing ? 2 : 1
+    // Eksen referans ararken ya da hareket ederken çerçeve turuncu olur.
+    border.color: box.axis.homing || box.axis.moving ? Theme.active : Theme.panelBorder
+    border.width: box.axis.homing || box.axis.moving ? 2 : 1
 
     ColumnLayout {
         anchors.fill: parent

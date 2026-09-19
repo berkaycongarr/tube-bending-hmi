@@ -13,14 +13,16 @@ QtObject {
     readonly property color textMuted: "#5a6470"
 
     // Durum renkleri
-    readonly property color ok: "#2e7d32"      // hazır, referans tamam
-    readonly property color active: "#c77800"  // devam eden işlem
-    readonly property color danger: "#c62828"  // stop, alarm
-    readonly property color idle: "#8b949e"    // bekliyor, referanssız
+    readonly property color ok: "#2e7d32"         // hazır, referans tamam
+    readonly property color active: "#c77800"     // devam eden işlem
+    readonly property color activeText: "#8a5300" // turuncu yazı (okunaklı koyu ton)
+    readonly property color danger: "#c62828"     // stop, alarm
+    readonly property color idle: "#8b949e"       // bekliyor, referanssız
 
-    // Butonlar
+    // Butonlar ve menü
     readonly property color buttonFace: "#e8eaed"
     readonly property color buttonDown: "#cdd2d8"
+    readonly property color navSelected: "#34404d"
 
     // Ölçüler
     readonly property int radius: 6

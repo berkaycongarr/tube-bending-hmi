@@ -50,7 +50,17 @@ public:
 
     // Komutlar: ekrandaki butonlar bunları çağırır.
     Q_INVOKABLE virtual void startHoming() = 0; // Referans ara (HOME)
-    Q_INVOKABLE virtual void stop() = 0;        // Hareketi durdur (STOP)
+    Q_INVOKABLE virtual void stop() = 0;        // Tüm hareketleri durdur (STOP)
+
+    // Elle sürme (jog), push buton mantığıyla:
+    //   startJog      butona basıldı: ekseni verilen yönde (-1 / +1) sürmeye başla
+    //   keepJogAlive  buton hâlâ basılı: ekran bunu 100 ms'de bir çağırır
+    //   stopJog       buton bırakıldı: dur
+    // Makine bir süre "hâlâ basılı" haberi alamazsa ekseni kendisi durdurur
+    // (bekçi zamanlayıcı). Böylece ekran donsa bile eksen kaçmaz.
+    Q_INVOKABLE virtual void startJog(Axis *axis, int direction, bool fast) = 0;
+    Q_INVOKABLE virtual void keepJogAlive(Axis *axis) = 0;
+    Q_INVOKABLE virtual void stopJog(Axis *axis) = 0;
 
 signals:
     void stateChanged();

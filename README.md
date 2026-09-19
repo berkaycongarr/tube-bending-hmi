@@ -30,10 +30,15 @@ Ekran yalnızca `IMachine`'i tanır. Gerçek makineye geçerken ekran kodu deği
 | Dosya | Görevi |
 |---|---|
 | `src/main.cpp` | Giriş noktası: makineyi oluşturur, ekranı yükler |
-| `src/machine/Axis.h` | Eksen: konum ve referans durumu |
+| `src/machine/Axis.h` | Eksen: konum, hareket, referans ve limit durumu |
 | `src/machine/IMachine.h` | Makine sözleşmesi: ekranın tanıdığı tek sınıf |
 | `src/machine/SimMachine.*` | Sanal makine (demo) |
-| `qml/Main.qml` | Ana ekran |
+| `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, süreler |
+| `qml/Main.qml` | Ana çerçeve: üst şerit, sol menü, sayfalar |
+| `qml/ProductionPage.qml` | Üretim sayfası (şimdilik referans arama) |
+| `qml/MotionPage.qml` | Hareket sayfası: eksenleri elle sürme (jog) |
 | `qml/Theme.qml` | Renkler ve ölçüler |
 | `qml/HmiButton.qml` | Dokunmatik buton |
+| `qml/JogButton.qml` | Push buton mantığıyla jog butonu |
+| `qml/NavButton.qml` | Sol menü butonu |
 | `qml/AxisDisplay.qml` | Eksen konum göstergesi |
