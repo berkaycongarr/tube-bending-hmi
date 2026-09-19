@@ -1,0 +1,50 @@
+# Bu dosya CMake'e projeyi nasıl derleyeceğini anlatır ("tarif defteri").
+cmake_minimum_required(VERSION 3.16)
+
+project(BoruBukmeHmi VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Qt 6.8 veya daha yenisini bul. Bize Quick (QML) modülü yetiyor.
+find_package(Qt6 6.8 REQUIRED COMPONENTS Quick)
+
+# Qt'nin önerdiği varsayılan ayarlar (moc'un otomatik çalışması vb.).
+qt_standard_project_setup(REQUIRES 6.8)
+
+# Çıktı: appBoruHmi.exe
+qt_add_executable(appBoruHmi
+    src/main.cpp
+)
+
+# Theme.qml tek bir ortak nesnedir (singleton): renkler ve ölçüler orada.
+set_source_files_properties(qml/Theme.qml PROPERTIES
+    QT_QML_SINGLETON_TYPE TRUE
+)
+
+# QML modülü: ekran dosyaları ve QML'in tanıdığı C++ sınıfları.
+qt_add_qml_module(appBoruHmi
+    URI BoruHmi
+    VERSION 1.0
+    QML_FILES
+        qml/Main.qml
+        qml/Theme.qml
+        qml/HmiButton.qml
+        qml/AxisDisplay.qml
+    SOURCES
+        src/machine/Axis.h
+        src/machine/IMachine.h
+        src/machine/SimMachine.h
+        src/machine/SimMachine.cpp
+)
+
+# Qt'nin ürettiği kayıt kodu başlık dosyalarını yalnızca adıyla çağırır
+# (#include <Axis.h>). Bu yüzden klasörü arama yoluna ekliyoruz.
+target_include_directories(appBoruHmi PRIVATE src/machine)
+
+# Windows'ta programın arkasında siyah konsol penceresi açılmasın.
+set_target_properties(appBoruHmi PROPERTIES
+    WIN32_EXECUTABLE TRUE
+)
+
+target_link_libraries(appBoruHmi PRIVATE Qt6::Quick)

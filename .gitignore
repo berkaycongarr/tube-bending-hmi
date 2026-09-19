@@ -1,0 +1,7 @@
+# Derleme çıktıları (Qt Creator bunları build/ klasörüne koyar)
+build/
+
+# Qt Creator'ın kişisel ayar dosyaları
+*.user
+*.user.*
+.qtcreator/
