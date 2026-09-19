@@ -30,71 +30,70 @@ Rectangle {
         }
     }
 
+    // Dört eksen satırı ve hidrolik, 1024x720 ekrana da sığacak şekilde sıkı yerleşir.
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 20
-        spacing: 12
+        anchors.margins: 16
+        spacing: 8
 
         // Başlık ve jog hızı seçimi
         RowLayout {
             Layout.fillWidth: true
-            Layout.bottomMargin: 4
-            spacing: Theme.gap
+            spacing: 10
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: 0
 
                 Text {
                     text: qsTr("Elle Kumanda")
-                    font.pixelSize: Theme.fontLarge
+                    font.pixelSize: Theme.fontTitle
                     font.bold: true
                     color: Theme.text
                 }
 
                 Text {
+                    objectName: "motionHint"
                     Layout.fillWidth: true
                     text: qsTr("− / + basılı tutulduğu sürece eksen hareket eder. "
                                + "Hedef girip GİT'e basınca eksen o konuma gider.")
-                    font.pixelSize: Theme.fontNormal
+                    font.pixelSize: 13
                     color: Theme.textMuted
                     wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
                 }
             }
 
-            ColumnLayout {
-                spacing: 4
+            Text {
+                Layout.maximumWidth: 150
+                horizontalAlignment: Text.AlignRight
+                text: page.machine.state === Machine.Ready ? qsTr("Jog hızı")
+                                                           : qsTr("Hızlı jog referanstan sonra")
+                font.pixelSize: Theme.fontSmall
+                color: Theme.textMuted
+                wrapMode: Text.WordWrap
+            }
 
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: page.machine.state === Machine.Ready ? qsTr("Jog hızı")
-                                                               : qsTr("Hızlı jog referanstan sonra")
-                    font.pixelSize: Theme.fontSmall
-                    color: Theme.textMuted
-                }
+            HmiButton {
+                objectName: "speedSlow"
+                implicitWidth: 100
+                implicitHeight: 44
+                font.pixelSize: 16
+                text: qsTr("YAVAŞ")
+                filled: !page.fastActive
+                onClicked: page.fast = false
+            }
 
-                RowLayout {
-                    spacing: 8
-
-                    HmiButton {
-                        objectName: "speedSlow"
-                        implicitWidth: 110
-                        implicitHeight: 52
-                        text: qsTr("YAVAŞ")
-                        filled: !page.fastActive
-                        onClicked: page.fast = false
-                    }
-
-                    HmiButton {
-                        objectName: "speedFast"
-                        implicitWidth: 110
-                        implicitHeight: 52
-                        text: qsTr("HIZLI")
-                        filled: page.fastActive
-                        enabled: page.machine.state === Machine.Ready
-                        onClicked: page.fast = true
-                    }
-                }
+            HmiButton {
+                objectName: "speedFast"
+                implicitWidth: 100
+                implicitHeight: 44
+                font.pixelSize: 16
+                text: qsTr("HIZLI")
+                filled: page.fastActive
+                enabled: page.machine.state === Machine.Ready
+                onClicked: page.fast = true
             }
         }
 
@@ -122,13 +121,32 @@ Rectangle {
             fast: page.fastActive
         }
 
-        // Hidrolik: pompa (normal start/stop) ve silindirler (kalıcı butonlar)
-        Text {
-            Layout.topMargin: 4
-            text: qsTr("Hidrolik")
-            font.pixelSize: Theme.fontNormal
-            font.bold: true
-            color: Theme.text
+        JogRow {
+            Layout.fillWidth: true
+            machine: page.machine
+            axis: page.machine.axisY
+            title: qsTr("Öteleme")
+            fast: page.fastActive
+        }
+
+        // Hidrolik: pompa (normal start/stop) ve silindirler (kalıcı butonlar).
+        // Bölüm adı, eksenlerden ayıran çizginin başında durur.
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Text {
+                text: qsTr("Hidrolik")
+                font.pixelSize: Theme.fontSmall
+                font.bold: true
+                color: Theme.textMuted
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 1
+                color: Theme.panelBorder
+            }
         }
 
         RowLayout {
@@ -237,7 +255,7 @@ Rectangle {
         }
 
         objectName: "row" + row.axis.name
-        implicitHeight: 84
+        implicitHeight: 70
         radius: Theme.radius
         color: "transparent"
         border.color: row.axis.moving ? Theme.active : Theme.panelBorder
@@ -295,7 +313,9 @@ Rectangle {
                 objectName: "target" + row.axis.name
                 Layout.minimumWidth: 144
                 Layout.maximumWidth: 144
-                Layout.preferredHeight: 68
+                Layout.preferredHeight: 58
+                topPadding: 5
+                bottomPadding: 5
                 caption: row.atTarget ? qsTr("Hedefte ✓") : qsTr("Hedef")
                 captionColor: row.atTarget ? Theme.ok : Theme.textMuted
                 text: row.hasTarget ? row.formatValue(row.targetValue) : "—"
@@ -307,7 +327,7 @@ Rectangle {
                 objectName: "go" + row.axis.name
                 Layout.minimumWidth: 80
                 Layout.maximumWidth: 80
-                Layout.preferredHeight: 68
+                Layout.preferredHeight: 58
                 text: qsTr("GİT")
                 enabled: row.canPosition && row.hasTarget && !row.axis.moving && !row.atTarget
                 onClicked: row.machine.moveTo(row.axis, row.targetValue)
@@ -317,7 +337,7 @@ Rectangle {
                 objectName: "jog" + row.axis.name + "Minus"
                 Layout.minimumWidth: 88
                 Layout.maximumWidth: 88
-                Layout.preferredHeight: 68
+                Layout.preferredHeight: 58
                 machine: row.machine
                 axis: row.axis
                 direction: -1
@@ -328,7 +348,7 @@ Rectangle {
                 objectName: "jog" + row.axis.name + "Plus"
                 Layout.minimumWidth: 88
                 Layout.maximumWidth: 88
-                Layout.preferredHeight: 68
+                Layout.preferredHeight: 58
                 machine: row.machine
                 axis: row.axis
                 direction: 1

@@ -10,6 +10,7 @@ Rectangle {
     required property Axis axis
     property string title
 
+    objectName: "axisDisplay" + box.axis.name
     implicitWidth: 190
     implicitHeight: 72
     radius: Theme.radius
@@ -65,25 +66,29 @@ Rectangle {
         }
 
         RowLayout {
-            spacing: box.axis.rotary ? 0 : 4
+            spacing: 4
 
-            Item {
-                Layout.fillWidth: true
-            }
-
+            // Değer sağa yaslı. Kutu daralırsa (ör. 1024 px ekranda) yazı taşmak
+            // yerine sığana kadar küçülür. Derece işareti rakamlarla aynı boyda.
             Text {
+                objectName: "axisValue"
+                Layout.fillWidth: true
                 Layout.alignment: Qt.AlignBaseline
-                text: box.axis.position.toFixed(2)
+                horizontalAlignment: Text.AlignRight
+                text: box.axis.position.toFixed(2) + (box.axis.rotary ? "°" : "")
                 font.pixelSize: Theme.fontLarge
                 font.bold: true
+                fontSizeMode: Text.HorizontalFit
+                minimumPixelSize: 16
                 color: Theme.text
             }
 
-            // Birim: derece işareti rakamla aynı boyda, "mm" küçük yazılır.
+            // Doğrusal eksenin birimi küçük yazılır.
             Text {
                 Layout.alignment: Qt.AlignBaseline
-                text: box.axis.rotary ? "°" : "mm"
-                font.pixelSize: box.axis.rotary ? Theme.fontLarge : Theme.fontSmall
+                visible: !box.axis.rotary
+                text: "mm"
+                font.pixelSize: Theme.fontSmall
                 color: Theme.textMuted
             }
         }

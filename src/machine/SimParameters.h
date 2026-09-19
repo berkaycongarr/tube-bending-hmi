@@ -3,7 +3,7 @@
 // Sanal makinenin tüm ayarları tek yerde.
 // Değerler şimdilik tahmini; müşteriden gerçek değerler gelince burası güncellenecek.
 
-// Bir eksenin ayarları. Birim: X için mm ve mm/sn, B ve A için derece ve derece/sn.
+// Bir eksenin ayarları. Birim: X ve Y için mm ve mm/sn, B ve A için derece ve derece/sn.
 struct AxisParameters
 {
     double minPosition;    // yazılım limiti, alt
@@ -21,10 +21,13 @@ struct AxisParameters
 namespace SimParameters {
 
 // X'in referansı öbür uçta: fotoğraflarda X, referans ararken artıyordu.
+// Y (öteleme) bir varsayımdır: fotoğraflarda etiketi okunmuyor. Müşterinin tablosundaki
+// ÖTELEME (mm) sütununun ekseni olduğunu düşünüyoruz; aralık ve hızlar demoda sorulacak.
 //                                      min     max  başlangıç  referans  ref.hızlı  ref.yavaş  yavaşla  jog.yavaş  jog.hızlı  konumlama
 inline constexpr AxisParameters X = {    0.0, 3000.0,  1693.35,   3000.0,     400.0,      40.0,    40.0,      25.0,     150.0,      400.0 };
 inline constexpr AxisParameters B = {    0.0,  190.0,     37.5,      0.0,      90.0,      12.0,    12.0,       5.0,      30.0,       45.0 };
 inline constexpr AxisParameters A = { -360.0,  360.0,     90.0,      0.0,      90.0,      12.0,    12.0,      10.0,      60.0,       90.0 };
+inline constexpr AxisParameters Y = {    0.0,  150.0,     42.0,      0.0,      30.0,       5.0,     5.0,       5.0,      25.0,       40.0 };
 
 inline constexpr int TickIntervalMs = 20;   // döngü aralığı: saniyede 50 tur
 inline constexpr double LatchSeconds = 0.5; // referans noktasında bekleme süresi (sn)

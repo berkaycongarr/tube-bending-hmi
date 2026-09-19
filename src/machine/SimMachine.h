@@ -82,8 +82,8 @@ private:
 
     QTimer m_timer;                            // döngüyü tetikleyen saat
     QElapsedTimer m_clock;                     // iki tur arasında geçen gerçek süre
-    std::array<SimAxis, 3> m_axes;             // X, B, A
-    std::array<SimAxis *, 3> m_homingOrder {}; // referans arama sırası
+    std::array<SimAxis, 4> m_axes;             // X, B, A, Y
+    std::array<SimAxis *, 4> m_homingOrder {}; // referans arama sırası
     int m_homingIndex = -1;                    // şu an referans arayan eksenin sırası (-1: yok)
     double m_latchTime = 0.0;                  // referans noktasında geçen bekleme süresi (sn)
     bool m_pumpCommand = false;                // mühürlü pompa komutu: START ile açılır, STOP ile kapanır

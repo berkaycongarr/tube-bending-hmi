@@ -15,6 +15,17 @@ CNC boru bükme makinesi için Windows operatör ekranı (HMI). C++ ve Qt 6 (QML
 2. Kit olarak **Desktop Qt 6.11.2 MinGW 64-bit** seçin → **Configure Project**
 3. Sol alttaki ▶ butonu (Ctrl+R)
 
+## Eksenler
+
+| Eksen | Görevi | Birim |
+|---|---|---|
+| X | İlerletme: araba boruyu iter | mm |
+| B | Büküm kolu | ° |
+| A | Rotasyon: boru kendi ekseninde döner | ° |
+| Y | Öteleme (varsayım; görevi, aralığı ve hızları müşteriye sorulacak) | mm |
+
+Referans arama sırası: B → Y → A → X. Tüm değerler `src/machine/SimParameters.h` içinde.
+
 ## Mimari
 
 ```

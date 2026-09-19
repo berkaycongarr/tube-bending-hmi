@@ -24,6 +24,7 @@ class IMachine : public QObject
     Q_PROPERTY(Axis *axisX READ axisX CONSTANT)
     Q_PROPERTY(Axis *axisB READ axisB CONSTANT)
     Q_PROPERTY(Axis *axisA READ axisA CONSTANT)
+    Q_PROPERTY(Axis *axisY READ axisY CONSTANT)
     Q_PROPERTY(PumpState pumpState READ pumpState NOTIFY pumpStateChanged)
     Q_PROPERTY(double pressure READ pressure NOTIFY pressureChanged)
     Q_PROPERTY(Actuator *clamp READ clamp CONSTANT)
@@ -51,6 +52,7 @@ public:
         , m_axisX(new Axis(QStringLiteral("X"), false, this))
         , m_axisB(new Axis(QStringLiteral("B"), true, this))
         , m_axisA(new Axis(QStringLiteral("A"), true, this))
+        , m_axisY(new Axis(QStringLiteral("Y"), false, this))
         , m_clamp(new Actuator(this))
         , m_mandrel(new Actuator(this))
         , m_collet(new Actuator(this))
@@ -58,9 +60,10 @@ public:
     }
 
     State state() const { return m_state; }
-    Axis *axisX() const { return m_axisX; }
-    Axis *axisB() const { return m_axisB; }
-    Axis *axisA() const { return m_axisA; }
+    Axis *axisX() const { return m_axisX; } // ilerletme: araba boruyu iter (mm)
+    Axis *axisB() const { return m_axisB; } // büküm kolu (derece)
+    Axis *axisA() const { return m_axisA; } // rotasyon: boru kendi ekseninde döner (derece)
+    Axis *axisY() const { return m_axisY; } // öteleme (mm); görevi müşteriye sorulacak
 
     PumpState pumpState() const { return m_pumpState; }
     double pressure() const { return m_pressure; } // hidrolik basınç (bar)
@@ -136,6 +139,7 @@ private:
     Axis *const m_axisX;
     Axis *const m_axisB;
     Axis *const m_axisA;
+    Axis *const m_axisY;
     Actuator *const m_clamp;
     Actuator *const m_mandrel;
     Actuator *const m_collet;

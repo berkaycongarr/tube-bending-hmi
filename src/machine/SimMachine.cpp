@@ -7,7 +7,8 @@ SimMachine::SimMachine(QObject *parent)
 {
     m_axes = { SimAxis { axisX(), SimParameters::X },
                SimAxis { axisB(), SimParameters::B },
-               SimAxis { axisA(), SimParameters::A } };
+               SimAxis { axisA(), SimParameters::A },
+               SimAxis { axisY(), SimParameters::Y } };
 
     // Parametreleri ve açılış konumlarını eksenlere yaz. Açılış konumu, makine
     // kapatılmadan önce eksenin kaldığı yer gibi düşünülebilir; referans
@@ -20,8 +21,9 @@ SimMachine::SimMachine(QObject *parent)
     }
 
     // Referans sırası: önce büküm kolu (B) geri çekilir ki boruya çarpmasın,
-    // sonra rotasyon (A), en son ilerletme arabası (X).
-    m_homingOrder = { &m_axes[1], &m_axes[2], &m_axes[0] };
+    // sonra öteleme (Y) ve rotasyon (A), en son ilerletme arabası (X).
+    // Y'nin sıradaki yeri varsayım: demoda müşteriye sorulacak.
+    m_homingOrder = { &m_axes[1], &m_axes[3], &m_axes[2], &m_axes[0] };
 
     // Silindirler açılışta bekleme konumunda (açık / geride).
     m_actuators = { SimActuator { clamp(), SimParameters::ClampTravelSeconds },
@@ -44,10 +46,12 @@ void SimMachine::startHoming()
     if (state() == Homing)
         return;
 
-    // Mengene boruyu tutuyorsa X ve A referansa gidemez.
+    // Kilitli bir eksen varsa (ör. mengene boruyu tutarken X, A, Y) referans aranamaz.
     updateInterlocks();
-    if (axisX()->interlock() != Axis::NoInterlock || axisA()->interlock() != Axis::NoInterlock)
-        return;
+    for (const SimAxis &sim : m_axes) {
+        if (sim.axis->interlock() != Axis::NoInterlock)
+            return;
+    }
 
     haltAllMotion();
 
@@ -89,7 +93,7 @@ void SimMachine::startJog(Axis *axis, int direction, bool fast)
     if (!sim || direction == 0 || state() == Homing)
         return;
 
-    // Kilitli eksen (ör. mengene boruyu tutarken X ya da A) hareket edemez.
+    // Kilitli eksen (ör. mengene boruyu tutarken X, A ya da Y) hareket edemez.
     updateInterlocks();
     if (axis->interlock() != Axis::NoInterlock)
         return;
@@ -247,17 +251,20 @@ void SimMachine::updateInterlocks()
     // kadar evet sayılır.
     const bool clampHolding = clamp()->command() || clamp()->state() != Actuator::Off;
 
-    // X ya da A hareket ediyor mu (referans arama dahil)?
-    const bool axesBusy = state() == Homing || axisX()->isMoving() || axisA()->isMoving();
+    // X, A ya da Y hareket ediyor mu (referans arama dahil)?
+    const bool axesBusy = state() == Homing || axisX()->isMoving() || axisA()->isMoving()
+                          || axisY()->isMoving();
 
     // Kural 1: mengene boruyu tutarken X (ilerletme) ve A (rotasyon) hareket edemez;
-    // boru kıskaçtayken çekilir ya da burulur. B (büküm) serbesttir.
+    // boru kıskaçtayken çekilir ya da burulur. Y (öteleme) de kilitlenir: sıkılı boruyu
+    // yana kaydırmak boruyu zorlar (güvenli taraftaki varsayım). B (büküm) serbesttir.
     const Axis::Interlock axisLock = clampHolding ? Axis::ClampClosed : Axis::NoInterlock;
     axisX()->setInterlock(axisLock);
     axisA()->setInterlock(axisLock);
+    axisY()->setInterlock(axisLock);
 
     // Kural 2: basınç yoksa hiçbir silindir kumanda edilemez.
-    // Kural 3: X ya da A hareket ederken mengene kumanda edilemez.
+    // Kural 3: X, A ya da Y hareket ederken mengene kumanda edilemez.
     clamp()->setInterlock(!pumpOk ? Actuator::PumpOff
                           : axesBusy ? Actuator::AxesMoving
                                      : Actuator::NoInterlock);

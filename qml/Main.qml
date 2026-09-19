@@ -23,8 +23,9 @@ Window {
     title: qsTr("Boru Bükme Makinesi")
     color: Theme.background
 
-    // Şu an referans arayan eksen (yoksa null).
+    // Şu an referans arayan eksen (yoksa null). Sıra, referans arama sırasıyla aynı.
     readonly property Axis homingAxis: machine.axisB.homing ? machine.axisB
+                                     : machine.axisY.homing ? machine.axisY
                                      : machine.axisA.homing ? machine.axisA
                                      : machine.axisX.homing ? machine.axisX
                                      : null
@@ -67,14 +68,16 @@ Window {
         anchors.margins: 16
         spacing: 16
 
-        // Üst şerit: durum, eksen konumları, STOP
+        // Üst şerit: durum, eksen konumları, STOP.
+        // Dar ekranda (1024 px) eksen kutuları 190'dan 145 px'e kadar daralır;
+        // durum kutusu en az 220 px kalır ki makinenin durumu her zaman okunsun.
         RowLayout {
             Layout.fillWidth: true
-            spacing: Theme.gap
+            spacing: 8
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.minimumWidth: 240
+                Layout.minimumWidth: 220
                 Layout.preferredHeight: 72
                 radius: Theme.radius
                 color: Theme.panel
@@ -98,11 +101,15 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
 
+                    // Uzun durum yazısı dar alanda önce küçülür, yine sığmazsa kısaltılır.
                     Text {
+                        objectName: "stateText"
                         width: parent.width
                         text: root.stateText
                         font.pixelSize: Theme.fontTitle
                         font.bold: true
+                        fontSizeMode: Text.HorizontalFit
+                        minimumPixelSize: 14
                         color: Theme.text
                         elide: Text.ElideRight
                     }
@@ -118,21 +125,35 @@ Window {
             }
 
             AxisDisplay {
-                Layout.minimumWidth: 170
+                Layout.fillWidth: true
+                Layout.minimumWidth: 145
+                Layout.maximumWidth: 190
                 axis: root.machine.axisX
                 title: qsTr("İlerletme")
             }
 
             AxisDisplay {
-                Layout.minimumWidth: 170
+                Layout.fillWidth: true
+                Layout.minimumWidth: 145
+                Layout.maximumWidth: 190
                 axis: root.machine.axisB
                 title: qsTr("Büküm")
             }
 
             AxisDisplay {
-                Layout.minimumWidth: 170
+                Layout.fillWidth: true
+                Layout.minimumWidth: 145
+                Layout.maximumWidth: 190
                 axis: root.machine.axisA
                 title: qsTr("Rotasyon")
+            }
+
+            AxisDisplay {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 145
+                Layout.maximumWidth: 190
+                axis: root.machine.axisY
+                title: qsTr("Öteleme")
             }
 
             HmiButton {

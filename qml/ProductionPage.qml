@@ -8,9 +8,10 @@ Rectangle {
 
     required property Machine machine
 
-    // Mengene boruyu tutuyorsa X ve A kilitlidir; referans arama da kilitlenir.
+    // Mengene boruyu tutuyorsa X, A ve Y kilitlidir; referans arama da kilitlenir.
     readonly property bool clampLocked: page.machine.axisX.interlock !== Axis.NoInterlock
                                         || page.machine.axisA.interlock !== Axis.NoInterlock
+                                        || page.machine.axisY.interlock !== Axis.NoInterlock
 
     radius: Theme.radius
     color: Theme.panel
@@ -48,13 +49,20 @@ Rectangle {
         HomingStep {
             Layout.fillWidth: true
             order: 2
+            axis: page.machine.axisY
+            title: qsTr("Öteleme ekseni referansa gider")
+        }
+
+        HomingStep {
+            Layout.fillWidth: true
+            order: 3
             axis: page.machine.axisA
             title: qsTr("Boru rotasyonu sıfırlanır")
         }
 
         HomingStep {
             Layout.fillWidth: true
-            order: 3
+            order: 4
             axis: page.machine.axisX
             title: qsTr("İlerletme arabası referansa gider")
         }
@@ -71,7 +79,7 @@ Rectangle {
             onClicked: page.machine.startHoming()
         }
 
-        // Referans aramada X ve A hareket eder; mengene boruyu tutuyorsa aranamaz.
+        // Referans aramada X, A ve Y hareket eder; mengene boruyu tutuyorsa aranamaz.
         Text {
             objectName: "homeLockHint"
             Layout.alignment: Qt.AlignHCenter
@@ -91,6 +99,7 @@ Rectangle {
         required property Axis axis
         required property string title
 
+        objectName: "homingStep" + step.axis.name
         implicitHeight: 52
         radius: Theme.radius
         color: step.axis.homing ? "#1ac77800" : "transparent"
@@ -139,8 +148,11 @@ Rectangle {
                 color: Theme.textMuted
             }
 
+            // Durum sütunu en uzun yazıya ("Aranıyor…", kalın) göre geniş tutulur;
+            // dar kalırsa yazı soldaki referans değerinin üstüne taşar.
             Text {
-                Layout.preferredWidth: 76
+                objectName: "homingState"
+                Layout.preferredWidth: 100
                 horizontalAlignment: Text.AlignRight
                 text: step.axis.homed ? qsTr("Tamam")
                                       : step.axis.homing ? qsTr("Aranıyor…") : qsTr("Bekliyor")
