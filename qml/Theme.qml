@@ -10,6 +10,7 @@ QtObject {
     readonly property color panel: "#f2f3f5"
     readonly property color panelBorder: "#c3c8cf"
     readonly property color field: "#ffffff"      // değer giriş alanları
+    readonly property color selection: "#e2e8ef"  // seçili tablo satırı
     readonly property color text: "#1c2229"
     readonly property color textMuted: "#5a6470"
 

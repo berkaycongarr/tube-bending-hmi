@@ -38,6 +38,7 @@ qt_add_qml_module(appBoruHmi
         qml/ActuatorButton.qml
         qml/AxisDisplay.qml
         qml/ProductionPage.qml
+        qml/DesignPage.qml
         qml/MotionPage.qml
     SOURCES
         src/machine/Actuator.h
@@ -46,11 +47,13 @@ qt_add_qml_module(appBoruHmi
         src/machine/SimParameters.h
         src/machine/SimMachine.h
         src/machine/SimMachine.cpp
+        src/program/BendProgram.h
+        src/program/BendProgram.cpp
 )
 
 # Qt'nin ürettiği kayıt kodu başlık dosyalarını yalnızca adıyla çağırır
-# (#include <Axis.h>). Bu yüzden klasörü arama yoluna ekliyoruz.
-target_include_directories(appBoruHmi PRIVATE src/machine)
+# (#include <Axis.h>). Bu yüzden klasörleri arama yoluna ekliyoruz.
+target_include_directories(appBoruHmi PRIVATE src/machine src/program)
 
 # Windows'ta programın arkasında siyah konsol penceresi açılmasın.
 set_target_properties(appBoruHmi PROPERTIES

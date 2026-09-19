@@ -9,7 +9,10 @@ Window {
     // main.cpp tarafından verilen makine nesnesi (demoda SimMachine).
     required property Machine machine
 
-    // Seçili sayfa: 0 = Üretim, 1 = Hareket
+    // main.cpp tarafından verilen büküm programı (reçete).
+    required property BendProgram program
+
+    // Seçili sayfa: 0 = Üretim, 1 = Tasarım, 2 = Hareket
     property int currentPage: 0
 
     width: 1280
@@ -171,11 +174,19 @@ Window {
                     }
 
                     NavButton {
+                        objectName: "navDesign"
+                        Layout.fillWidth: true
+                        text: qsTr("TASARIM")
+                        selected: root.currentPage === 1
+                        onClicked: root.currentPage = 1
+                    }
+
+                    NavButton {
                         objectName: "navMotion"
                         Layout.fillWidth: true
                         text: qsTr("HAREKET")
-                        selected: root.currentPage === 1
-                        onClicked: root.currentPage = 1
+                        selected: root.currentPage === 2
+                        onClicked: root.currentPage = 2
                     }
 
                     Item {
@@ -191,6 +202,10 @@ Window {
 
                 ProductionPage {
                     machine: root.machine
+                }
+
+                DesignPage {
+                    program: root.program
                 }
 
                 MotionPage {

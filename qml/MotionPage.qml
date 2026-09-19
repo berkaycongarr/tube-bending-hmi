@@ -343,7 +343,7 @@ Rectangle {
             unit: row.axis.rotary ? "°" : "mm"
             minimum: row.axis.minPosition
             maximum: row.axis.maxPosition
-            current: row.axis.position
+            note: qsTr("Şu anki konum: %1").arg(row.formatValue(row.axis.position))
             onValueEntered: value => {
                 row.targetValue = value
             }

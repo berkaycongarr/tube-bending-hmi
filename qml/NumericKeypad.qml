@@ -15,7 +15,7 @@ T.Popup {
     property string unit          // "mm" ya da "°"
     property real minimum: 0
     property real maximum: 0
-    property real current: 0      // eksenin şu anki konumu (bilgi için)
+    property string note          // aralığın altında gösterilen bilgi (ör. şu anki değer)
 
     property string entry: ""     // yazılan metin
 
@@ -120,7 +120,8 @@ T.Popup {
         }
 
         Text {
-            text: qsTr("Şu anki konum: %1").arg(pad.formatValue(pad.current))
+            visible: pad.note.length > 0
+            text: pad.note
             font.pixelSize: Theme.fontSmall
             color: Theme.textMuted
         }

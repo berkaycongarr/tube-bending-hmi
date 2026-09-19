@@ -25,18 +25,23 @@ Ekran (QML)  →  IMachine (sözleşme)  ←  SimMachine      (demo: sanal makin
 Ekran yalnızca `IMachine`'i tanır. Gerçek makineye geçerken ekran kodu değişmez;
 `main.cpp`'de oluşturulan makine nesnesi değişir.
 
+Büküm programı (`BendProgram`, reçete) makineden ayrıdır: ekranın verisidir, makineye
+geçişte değişmez. Adımların alabileceği değerler makinenin eksen limitlerinden gelir.
+
 ## Klasör yapısı
 
 | Dosya | Görevi |
 |---|---|
-| `src/main.cpp` | Giriş noktası: makineyi oluşturur, ekranı yükler |
+| `src/main.cpp` | Giriş noktası: makineyi ve programı oluşturur, ekranı yükler |
 | `src/machine/Axis.h` | Eksen: konum, hareket, referans, limit ve kilit durumu |
 | `src/machine/Actuator.h` | Hidrolik silindir: komut, sensör durumu ve kilit |
 | `src/machine/IMachine.h` | Makine sözleşmesi: ekranın tanıdığı tek sınıf |
 | `src/machine/SimMachine.*` | Sanal makine (demo) |
 | `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, süreler |
+| `src/program/BendProgram.*` | Büküm programı (reçete): komut listesi, açınım boyu, doğrulama |
 | `qml/Main.qml` | Ana çerçeve: üst şerit, sol menü, sayfalar |
 | `qml/ProductionPage.qml` | Üretim sayfası (şimdilik referans arama) |
+| `qml/DesignPage.qml` | Tasarım sayfası: program tablosu, boru ve kalıp, açınım boyu |
 | `qml/MotionPage.qml` | Hareket sayfası: jog, hedef konuma gitme ve hidrolik |
 | `qml/Theme.qml` | Renkler ve ölçüler |
 | `qml/HmiButton.qml` | Dokunmatik buton |
