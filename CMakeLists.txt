@@ -40,6 +40,10 @@ qt_add_qml_module(appBoruHmi
         qml/ProductionPage.qml
         qml/DesignPage.qml
         qml/MotionPage.qml
+        qml/ConfirmDialog.qml
+        qml/NameDialog.qml
+        qml/ProgramsDialog.qml
+        qml/ProgramManager.qml
     SOURCES
         src/machine/Actuator.h
         src/machine/Axis.h
@@ -49,6 +53,8 @@ qt_add_qml_module(appBoruHmi
         src/machine/SimMachine.cpp
         src/program/BendProgram.h
         src/program/BendProgram.cpp
+        src/program/ProgramStore.h
+        src/program/ProgramStore.cpp
 )
 
 # Qt'nin ürettiği kayıt kodu başlık dosyalarını yalnızca adıyla çağırır

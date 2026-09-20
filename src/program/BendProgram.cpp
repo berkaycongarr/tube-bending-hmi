@@ -1,5 +1,6 @@
 #include "BendProgram.h"
 
+#include <QJsonArray>
 #include <QtMath>
 
 #include <cmath>
@@ -10,6 +11,24 @@ namespace {
 bool isCommand(int command)
 {
     return command >= BendProgram::Feed && command <= BendProgram::Rotate;
+}
+
+// Dosya biçiminin adı ve sürümü. Biçim değişirse sürüm artar; böylece eski
+// dosyalar tanınır, daha yeni sürümle yazılmış dosya da yanlışlıkla açılmaz.
+const QString FormatName = QStringLiteral("BoruBukmeProgram");
+constexpr int FormatVersion = 1;
+
+// Komutlar dosyada sayı değil yazı olarak saklanır: dosyayı açan kişi anlar,
+// koddaki sıralama değişse de dosyalar bozulmaz.
+const char *const CommandNames[] = { "feed", "bend", "rotate" };
+
+// Sayı gerçekten bir sayı mı (sonsuz ya da tanımsız değil)?
+bool readNumber(const QJsonValue &value, double &number)
+{
+    if (!value.isDouble() || !std::isfinite(value.toDouble()))
+        return false;
+    number = value.toDouble();
+    return true;
 }
 
 } // namespace
@@ -72,6 +91,7 @@ void BendProgram::setTubeLength(double length)
     m_tubeLength = length;
     emit tubeChanged();
     emit summaryChanged();
+    setModified(true);
 }
 
 void BendProgram::setTubeDiameter(double diameter)
@@ -80,6 +100,7 @@ void BendProgram::setTubeDiameter(double diameter)
         return;
     m_tubeDiameter = diameter;
     emit tubeChanged();
+    setModified(true);
 }
 
 void BendProgram::setDieRadius(double radius)
@@ -89,6 +110,7 @@ void BendProgram::setDieRadius(double radius)
     m_dieRadius = radius;
     emit tubeChanged();
     emit summaryChanged(); // yay boyları yarıçapa bağlı
+    setModified(true);
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +146,14 @@ bool BendProgram::isValid() const
     return count() > 0 && invalidStepCount() == 0 && remainingLength() >= -0.001;
 }
 
+void BendProgram::setModified(bool modified)
+{
+    if (m_modified == modified)
+        return;
+    m_modified = modified;
+    emit modifiedChanged();
+}
+
 void BendProgram::setStepLimits(Command command, double minimum, double maximum)
 {
     if (!isCommand(command))
@@ -132,6 +162,7 @@ void BendProgram::setStepLimits(Command command, double minimum, double maximum)
     m_maximum[command] = maximum;
 
     // Sınırlar değişti: satırların geçerliliği yeniden hesaplanmalı.
+    // (Sınırlar makinenin ayarıdır; program değişmiş sayılmaz.)
     if (count() > 0)
         emit dataChanged(index(0), index(count() - 1), { ValidRole });
     emit summaryChanged();
@@ -167,6 +198,7 @@ bool BendProgram::insertStep(int row, Command command, double value)
     m_steps.insert(row, Step { command, value });
     endInsertRows();
     emit summaryChanged();
+    setModified(true);
     return true;
 }
 
@@ -182,6 +214,7 @@ bool BendProgram::setValue(int row, double value)
     step.value = value;
     emit dataChanged(index(row), index(row), { ValueRole, ValidRole });
     emit summaryChanged();
+    setModified(true);
     return true;
 }
 
@@ -194,6 +227,7 @@ bool BendProgram::removeStep(int row)
     m_steps.removeAt(row);
     endRemoveRows();
     emit summaryChanged();
+    setModified(true);
     return true;
 }
 
@@ -208,7 +242,118 @@ bool BendProgram::moveStep(int from, int to)
     m_steps.move(from, to);
     endMoveRows();
     emit summaryChanged();
+    setModified(true);
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// Dosya biçimi
+// ---------------------------------------------------------------------------
+
+QJsonObject BendProgram::toJson() const
+{
+    QJsonArray steps;
+    for (const Step &step : m_steps) {
+        steps.append(QJsonObject {
+            { QStringLiteral("command"), QString::fromLatin1(CommandNames[step.command]) },
+            { QStringLiteral("value"), step.value },
+        });
+    }
+
+    return QJsonObject {
+        { QStringLiteral("format"), FormatName },
+        { QStringLiteral("version"), FormatVersion },
+        { QStringLiteral("name"), m_name },
+        { QStringLiteral("tube"), QJsonObject {
+              { QStringLiteral("length"), m_tubeLength },
+              { QStringLiteral("diameter"), m_tubeDiameter },
+              { QStringLiteral("dieRadius"), m_dieRadius },
+          } },
+        { QStringLiteral("steps"), steps },
+    };
+}
+
+bool BendProgram::fromJson(const QJsonObject &json, Data &data, QString &error)
+{
+    if (json.value(QStringLiteral("format")).toString() != FormatName) {
+        error = tr("bu dosya bir büküm programı değil");
+        return false;
+    }
+
+    const QJsonValue version = json.value(QStringLiteral("version"));
+    if (!version.isDouble() || version.toDouble() != version.toInt() || version.toInt() < 1) {
+        error = tr("dosyanın sürüm bilgisi hatalı");
+        return false;
+    }
+    if (version.toInt() > FormatVersion) {
+        error = tr("dosya programın daha yeni bir sürümüyle kaydedilmiş (sürüm %1)").arg(version.toInt());
+        return false;
+    }
+
+    Data result;
+    result.name = json.value(QStringLiteral("name")).toString();
+
+    const QJsonObject tube = json.value(QStringLiteral("tube")).toObject();
+    if (!readNumber(tube.value(QStringLiteral("length")), result.tubeLength)
+        || !readNumber(tube.value(QStringLiteral("diameter")), result.tubeDiameter)
+        || !readNumber(tube.value(QStringLiteral("dieRadius")), result.dieRadius)
+        || !(result.tubeLength > 0.0) || !(result.tubeDiameter > 0.0) || !(result.dieRadius > 0.0)) {
+        error = tr("boru ve kalıp bilgileri eksik ya da hatalı");
+        return false;
+    }
+
+    const QJsonValue steps = json.value(QStringLiteral("steps"));
+    if (!steps.isArray()) {
+        error = tr("adım listesi bulunamadı");
+        return false;
+    }
+
+    const QJsonArray array = steps.toArray();
+    for (qsizetype i = 0; i < array.size(); ++i) {
+        const QJsonObject item = array.at(i).toObject();
+        const QString command = item.value(QStringLiteral("command")).toString();
+
+        Step step;
+        int found = -1;
+        for (int c = Feed; c <= Rotate; ++c) {
+            if (command == QLatin1String(CommandNames[c]))
+                found = c;
+        }
+        if (found < 0 || !readNumber(item.value(QStringLiteral("value")), step.value)) {
+            error = tr("%1. adım hatalı").arg(i + 1);
+            return false;
+        }
+        step.command = Command(found);
+        result.steps.append(step);
+    }
+
+    data = result;
+    return true;
+}
+
+void BendProgram::setData(const Data &data)
+{
+    beginResetModel();
+    m_steps = data.steps;
+    endResetModel();
+
+    setName(data.name);
+    m_tubeLength = data.tubeLength;
+    m_tubeDiameter = data.tubeDiameter;
+    m_dieRadius = data.dieRadius;
+    emit tubeChanged();
+    emit summaryChanged();
+    setModified(false);
+}
+
+void BendProgram::clear(const QString &name)
+{
+    Data data;
+    data.name = name;
+    data.tubeLength = m_tubeLength;
+    data.tubeDiameter = m_tubeDiameter;
+    data.dieRadius = m_dieRadius;
+    setData(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -218,14 +363,11 @@ bool BendProgram::moveStep(int from, int to)
 void BendProgram::loadExample()
 {
     // Müşterinin ekranındaki program: okul sandalyesinin oturak iskeleti (U parça).
-    beginResetModel();
-    m_steps = { { Feed, 260.0 }, { Bend, 88.5 }, { Feed, 95.0 }, { Bend, 88.5 }, { Feed, 260.0 } };
-    endResetModel();
-
-    setName(QStringLiteral("Ortaokul Oturak (2026)"));
-    m_tubeLength = 980.0;
-    m_tubeDiameter = 50.0;
-    m_dieRadius = 116.0;
-    emit tubeChanged();
-    emit summaryChanged();
+    Data data;
+    data.name = QStringLiteral("Ortaokul Oturak (2026)");
+    data.tubeLength = 980.0;
+    data.tubeDiameter = 50.0;
+    data.dieRadius = 116.0;
+    data.steps = { { Feed, 260.0 }, { Bend, 88.5 }, { Feed, 95.0 }, { Bend, 88.5 }, { Feed, 260.0 } };
+    setData(data);
 }

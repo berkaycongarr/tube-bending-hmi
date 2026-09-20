@@ -12,8 +12,22 @@ Window {
     // main.cpp tarafından verilen büküm programı (reçete).
     required property BendProgram program
 
+    // main.cpp tarafından verilen program deposu (Belgeler\BoruBukme\Programlar).
+    required property ProgramStore store
+
     // Seçili sayfa: 0 = Üretim, 1 = Tasarım, 2 = Hareket
     property int currentPage: 0
+
+    // Kapanış onaylandı mı? Kaydedilmemiş değişiklik varsa pencere hemen kapanmaz,
+    // önce KAYDET / KAYDETME / İPTAL diye sorulur.
+    property bool exitConfirmed: false
+
+    onClosing: close => {
+        if (root.program.modified && !root.exitConfirmed) {
+            close.accepted = false
+            programManager.requestClose()
+        }
+    }
 
     width: 1280
     height: 760
@@ -227,6 +241,7 @@ Window {
 
                 DesignPage {
                     program: root.program
+                    manager: programManager
                 }
 
                 MotionPage {
@@ -279,5 +294,17 @@ Window {
         repeat: true
         triggeredOnStart: true
         onTriggered: clock.text = Qt.formatDateTime(new Date(), "dd.MM.yyyy  HH:mm:ss")
+    }
+
+    // Program dosya işlemleri ve pencereleri (kaydet, aç, programlar listesi).
+    ProgramManager {
+        id: programManager
+
+        program: root.program
+        store: root.store
+        onCloseApproved: {
+            root.exitConfirmed = true
+            root.close()
+        }
     }
 }

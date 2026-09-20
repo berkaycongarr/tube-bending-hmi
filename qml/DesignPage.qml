@@ -13,8 +13,20 @@ Rectangle {
 
     required property BendProgram program
 
+    // Program dosya işlemleri (kaydet, programlar penceresi); Main.qml'de oluşturulur.
+    required property ProgramManager manager
+
     // Seçili satır (-1: seçim yok). Ekleme seçili satırın altına yapılır.
     property int currentRow: -1
+
+    // Başka bir program açılınca (ya da yeni program başlayınca) seçim sıfırlanır.
+    Connections {
+        target: page.program
+
+        function onModelReset() {
+            page.currentRow = -1
+        }
+    }
 
     // Tuş takımı şu an neyi düzenliyor?
     property string editKind: ""
@@ -132,13 +144,39 @@ Rectangle {
                     color: Theme.textMuted
                 }
 
+                // Ad sığdığı kadar yer kaplar; yer darsa sonu "…" ile kısalır.
                 Text {
+                    objectName: "programName"
                     Layout.fillWidth: true
+                    Layout.maximumWidth: implicitWidth
                     text: page.program.name
                     font.pixelSize: Theme.fontTitle
                     font.bold: true
                     color: Theme.text
                     elide: Text.ElideRight
+                }
+
+                // Son kayıttan beri değişiklik var mı?
+                Text {
+                    objectName: "unsavedMark"
+                    visible: page.program.modified
+                    text: qsTr("● Kaydedilmedi")
+                    font.pixelSize: Theme.fontSmall
+                    font.bold: true
+                    color: Theme.activeText
+                }
+
+                Text {
+                    objectName: "savedMark"
+                    visible: page.manager.justSaved && !page.program.modified
+                    text: qsTr("✓ Kaydedildi")
+                    font.pixelSize: Theme.fontSmall
+                    font.bold: true
+                    color: Theme.ok
+                }
+
+                Item {
+                    Layout.fillWidth: true
                 }
 
                 Text {
@@ -428,6 +466,34 @@ Rectangle {
             Layout.fillHeight: true
             spacing: 10
 
+            // Program dosyası: kaydet ve programlar penceresi
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                HmiButton {
+                    objectName: "saveProgram"
+                    Layout.preferredWidth: 90
+                    implicitHeight: 48
+                    padding: 6
+                    font.pixelSize: 14
+                    text: qsTr("KAYDET")
+                    accent: Theme.ok
+                    enabled: page.manager.canSave
+                    onClicked: page.manager.save()
+                }
+
+                HmiButton {
+                    objectName: "showPrograms"
+                    Layout.fillWidth: true
+                    implicitHeight: 48
+                    padding: 6
+                    font.pixelSize: 14
+                    text: qsTr("PROGRAMLAR")
+                    onClicked: page.manager.showPrograms()
+                }
+            }
+
             Text {
                 text: qsTr("Boru ve kalıp")
                 font.pixelSize: Theme.fontNormal
@@ -438,6 +504,9 @@ Rectangle {
             ValueField {
                 objectName: "tubeLength"
                 Layout.fillWidth: true
+                Layout.preferredHeight: 62
+                topPadding: 6
+                bottomPadding: 6
                 caption: qsTr("Boru boyu")
                 text: page.formatValue(page.program.tubeLength, "mm")
                 onClicked: page.editTube("tubeLength", qsTr("Boru boyu"), 10, 6000, page.program.tubeLength)
@@ -446,6 +515,9 @@ Rectangle {
             ValueField {
                 objectName: "tubeDiameter"
                 Layout.fillWidth: true
+                Layout.preferredHeight: 62
+                topPadding: 6
+                bottomPadding: 6
                 caption: qsTr("Boru çapı")
                 text: page.formatValue(page.program.tubeDiameter, "mm")
                 onClicked: page.editTube("tubeDiameter", qsTr("Boru çapı"), 4, 120, page.program.tubeDiameter)
@@ -454,6 +526,9 @@ Rectangle {
             ValueField {
                 objectName: "dieRadius"
                 Layout.fillWidth: true
+                Layout.preferredHeight: 62
+                topPadding: 6
+                bottomPadding: 6
                 caption: qsTr("Kalıp yarıçapı (R)")
                 text: page.formatValue(page.program.dieRadius, "mm")
                 onClicked: page.editTube("dieRadius", qsTr("Kalıp yarıçapı (R)"), 5, 500, page.program.dieRadius)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QJsonObject>
 #include <QList>
 #include <QString>
 #include <QtQml/qqmlregistration.h>
@@ -33,6 +34,7 @@ class BendProgram : public QAbstractListModel
     Q_PROPERTY(double remainingLength READ remainingLength NOTIFY summaryChanged)
     Q_PROPERTY(int invalidStepCount READ invalidStepCount NOTIFY summaryChanged)
     Q_PROPERTY(bool valid READ isValid NOTIFY summaryChanged)
+    Q_PROPERTY(bool modified READ isModified NOTIFY modifiedChanged)
 
 public:
     enum Command {
@@ -53,6 +55,16 @@ public:
     {
         Command command = Feed;
         double value = 0.0;
+    };
+
+    // Programın tüm içeriği: dosyadan okunan ya da dosyaya yazılan bilgi.
+    struct Data
+    {
+        QString name;
+        double tubeLength = 0.0;
+        double tubeDiameter = 0.0;
+        double dieRadius = 0.0;
+        QList<Step> steps;
     };
 
     explicit BendProgram(QObject *parent = nullptr);
@@ -82,6 +94,10 @@ public:
     int invalidStepCount() const;
     bool isValid() const;
 
+    // Program son kayıttan (ya da açılıştan) beri değişti mi? Kaydedilince sıfırlanır.
+    bool isModified() const { return m_modified; }
+    void setModified(bool modified);
+
     // Bir komutun alabileceği değer aralığı. Makinenin eksen limitlerinden gelir
     // (main.cpp bağlar); böylece program, makinenin yapamayacağı bir adım içeremez.
     void setStepLimits(Command command, double minimum, double maximum);
@@ -94,6 +110,18 @@ public:
     Q_INVOKABLE bool removeStep(int row);
     Q_INVOKABLE bool moveStep(int from, int to);
 
+    // Dosya biçimi (JSON). Okurken her şey denetlenir; bir sorun varsa false döner,
+    // error nedenini söyler. Makine limitini aşan değerler kabul edilir: program
+    // sessizce değiştirilmez, ekranda kırmızı görünür.
+    QJsonObject toJson() const;
+    static bool fromJson(const QJsonObject &json, Data &data, QString &error);
+
+    // Programın tüm içeriğini değiştir (dosyadan açınca). Değişti bayrağı sıfırlanır.
+    void setData(const Data &data);
+
+    // Boş yeni program. Boru ve kalıp bilgileri kalır: takılı kalıp aynıdır.
+    void clear(const QString &name);
+
     // Örnek program: müşterinin ekranındaki "Ortaokul Oturak (2026)".
     void loadExample();
 
@@ -101,6 +129,7 @@ signals:
     void nameChanged();
     void tubeChanged();
     void summaryChanged(); // adım sayısı, açınım boyu, artan boy, geçerlilik
+    void modifiedChanged();
 
 private:
     bool inRange(Command command, double value) const;
@@ -110,6 +139,7 @@ private:
     double m_tubeDiameter = 0.0;
     double m_dieRadius = 0.0;
     QList<Step> m_steps;
+    bool m_modified = false;
     std::array<double, 3> m_minimum { 0.0, 0.0, 0.0 }; // komut başına alt sınır
     std::array<double, 3> m_maximum { 0.0, 0.0, 0.0 }; // komut başına üst sınır
 };

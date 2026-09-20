@@ -39,6 +39,17 @@ Ekran yalnızca `IMachine`'i tanır. Gerçek makineye geçerken ekran kodu deği
 Büküm programı (`BendProgram`, reçete) makineden ayrıdır: ekranın verisidir, makineye
 geçişte değişmez. Adımların alabileceği değerler makinenin eksen limitlerinden gelir.
 
+## Programlar
+
+Her program `Belgeler\BoruBukme\Programlar` klasöründe ayrı bir `.json` dosyasıdır;
+dosyanın adı programın adıdır. Dosyalar kopyalanabilir, başka makineye taşınabilir.
+Son açılan program `Belgeler\BoruBukme\ayarlar.ini` içinde tutulur; uygulama açılınca
+o program açılır. Klasör boşsa örnek program oraya kaydedilir.
+
+Kaydetme güvenlidir (`QSaveFile`): önce geçici bir dosyaya yazılır, yazma bitince eski
+dosyanın yerine geçer. Kaydedilmemiş değişiklik varken başka program açılırsa ya da
+uygulama kapatılırsa önce sorulur.
+
 ## Klasör yapısı
 
 | Dosya | Görevi |
@@ -49,10 +60,15 @@ geçişte değişmez. Adımların alabileceği değerler makinenin eksen limitle
 | `src/machine/IMachine.h` | Makine sözleşmesi: ekranın tanıdığı tek sınıf |
 | `src/machine/SimMachine.*` | Sanal makine (demo) |
 | `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, süreler |
-| `src/program/BendProgram.*` | Büküm programı (reçete): komut listesi, açınım boyu, doğrulama |
+| `src/program/BendProgram.*` | Büküm programı (reçete): komut listesi, açınım boyu, doğrulama, JSON biçimi |
+| `src/program/ProgramStore.*` | Program deposu: klasördeki dosyalar, aç / kaydet / sil |
 | `qml/Main.qml` | Ana çerçeve: üst şerit, sol menü, sayfalar |
 | `qml/ProductionPage.qml` | Üretim sayfası (şimdilik referans arama) |
 | `qml/DesignPage.qml` | Tasarım sayfası: program tablosu, boru ve kalıp, açınım boyu |
+| `qml/ProgramManager.qml` | Program dosya işlemlerinin akışı ve soruları |
+| `qml/ProgramsDialog.qml` | Programlar penceresi: liste, AÇ / YENİ / FARKLI KAYDET / SİL |
+| `qml/NameDialog.qml` | Program adı girme penceresi |
+| `qml/ConfirmDialog.qml` | Onay ve bilgi penceresi |
 | `qml/MotionPage.qml` | Hareket sayfası: jog, hedef konuma gitme ve hidrolik |
 | `qml/Theme.qml` | Renkler ve ölçüler |
 | `qml/HmiButton.qml` | Dokunmatik buton |

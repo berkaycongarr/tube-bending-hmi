@@ -1,8 +1,11 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QSettings>
+#include <QStandardPaths>
 
 #include "machine/SimMachine.h"
 #include "program/BendProgram.h"
+#include "program/ProgramStore.h"
 
 int main(int argc, char *argv[])
 {
@@ -20,7 +23,30 @@ int main(int argc, char *argv[])
     program.setStepLimits(BendProgram::Bend, 0.1, machine.axisB()->maxPosition());
     program.setStepLimits(BendProgram::Rotate, machine.axisA()->minPosition(),
                           machine.axisA()->maxPosition());
-    program.loadExample();
+
+    // Programlar Belgeler\BoruBukme\Programlar klasöründe, her biri ayrı bir dosya.
+    // Gerçek makinede burası sabit bir klasör ya da fabrikanın ağ klasörü olabilir.
+    const QString dataFolder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                               + QStringLiteral("/BoruBukme");
+    ProgramStore store(dataFolder + QStringLiteral("/Programlar"), &program);
+
+    // Uygulamanın ayarları (şimdilik yalnızca son açılan program) küçük bir metin dosyasında.
+    QSettings settings(dataFolder + QStringLiteral("/ayarlar.ini"), QSettings::IniFormat);
+
+    // Açılış: son kullanılan program; o açılamazsa klasördeki ilk program.
+    // Klasör boşsa örnek program oraya kaydedilir (demoda liste boş görünmesin).
+    const QString lastProgram = settings.value(QStringLiteral("sonProgram")).toString();
+    const bool opened = (!lastProgram.isEmpty() && store.open(lastProgram)) || store.openFirst();
+    if (!opened) {
+        program.loadExample();
+        store.saveAs(program.name());
+    }
+
+    // Açık program değiştikçe adını hatırla: bir sonraki açılışta o açılır.
+    settings.setValue(QStringLiteral("sonProgram"), store.currentName());
+    QObject::connect(&store, &ProgramStore::currentNameChanged, &settings, [&settings, &store] {
+        settings.setValue(QStringLiteral("sonProgram"), store.currentName());
+    });
 
     QQmlApplicationEngine engine;
 
@@ -29,6 +55,7 @@ int main(int argc, char *argv[])
     engine.setInitialProperties({
         { QStringLiteral("machine"), QVariant::fromValue<IMachine *>(&machine) },
         { QStringLiteral("program"), QVariant::fromValue(&program) },
+        { QStringLiteral("store"), QVariant::fromValue(&store) },
     });
 
     // QML dosyası yüklenemezse (yazım hatası vb.) programı kapat.
