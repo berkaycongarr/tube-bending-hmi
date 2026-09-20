@@ -35,7 +35,15 @@ Item {
 
     // ---------------- Dışarıdan çağrılanlar ----------------
 
+    // TASARIM: programlar penceresinin tamamı (aç, yeni, farklı kaydet, sil).
     function showPrograms() {
+        programsDialog.loadOnly = false
+        programsDialog.open()
+    }
+
+    // ÜRETİM: yalnızca program seçip yükleme; silme ve kaydetme orada yok.
+    function loadProgram() {
+        programsDialog.loadOnly = true
         programsDialog.open()
     }
 

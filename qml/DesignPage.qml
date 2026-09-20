@@ -1,9 +1,5 @@
-// Liste satırları bu dosyadaki "page" ve "list" kimliklerine güvenle erişebilsin.
-pragma ComponentBehavior: Bound
-
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Templates as T
 
 // TASARIM sayfası: büküm programını (reçeteyi) düzenleme.
 // Solda komut listesi, sağda boru ve kalıp bilgileri ile açınım boyu doğrulaması.
@@ -33,17 +29,6 @@ Rectangle {
     property int editRow: -1
     property int editCommand: BendProgram.Feed
 
-    function commandName(command: int): string {
-        switch (command) {
-        case BendProgram.Bend:
-            return qsTr("BÜK")
-        case BendProgram.Rotate:
-            return qsTr("ROTASYON")
-        default:
-            return qsTr("İLERLE")
-        }
-    }
-
     function unitFor(command: int): string {
         return command === BendProgram.Feed ? "mm" : "°"
     }
@@ -55,8 +40,7 @@ Rectangle {
     // Satırı seç ve listede görünür olmasını sağla (liste uzunsa kaydırır).
     function selectRow(row: int) {
         page.currentRow = row
-        if (row >= 0)
-            list.positionViewAtIndex(row, ListView.Contain)
+        table.showRow(row)
     }
 
     function openKeypad(kind: string, title: string, unit: string,
@@ -75,7 +59,7 @@ Rectangle {
         page.selectRow(row)
         page.editRow = row
         const unit = page.unitFor(command)
-        page.openKeypad("step", qsTr("%1. adım · %2").arg(row + 1).arg(page.commandName(command)), unit,
+        page.openKeypad("step", qsTr("%1. adım · %2").arg(row + 1).arg(table.commandName(command)), unit,
                         page.program.minimumValue(command), page.program.maximumValue(command),
                         qsTr("Şu anki değer: %1").arg(page.formatValue(value, unit)))
     }
@@ -83,7 +67,7 @@ Rectangle {
     // Seçili satırın altına (seçim yoksa sona) yeni adım ekle: önce değeri sor.
     function addStep(command: int) {
         page.editCommand = command
-        page.openKeypad("insert", qsTr("Yeni adım · %1").arg(page.commandName(command)),
+        page.openKeypad("insert", qsTr("Yeni adım · %1").arg(table.commandName(command)),
                         page.unitFor(command),
                         page.program.minimumValue(command), page.program.maximumValue(command),
                         page.currentRow >= 0 ? qsTr("%1. adımın altına eklenecek").arg(page.currentRow + 1)
@@ -191,181 +175,18 @@ Rectangle {
                 Layout.fillHeight: true
                 spacing: 8
 
-                // Tablo: başlık ve satırlar
-                ColumnLayout {
+                // Tablo: başlık ve satırlar (ÜRETİM sayfasıyla ortak bileşen)
+                ProgramTable {
+                    id: table
+
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: 6
-
-                    // Sütunlar müşterinin mevcut ekranındaki gibi. Birimler başlıkta
-                    // yazılı olduğu için hücrelerde yalnızca sayı görünür.
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 44
-                        radius: Theme.radius
-                        color: Theme.buttonFace
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 6
-                            spacing: 8
-
-                            HeaderText {
-                                Layout.preferredWidth: 30
-                                text: qsTr("NO")
-                            }
-
-                            HeaderText {
-                                Layout.preferredWidth: 104
-                                text: qsTr("KOMUT")
-                            }
-
-                            ColumnHeader {
-                                title: qsTr("UZUNLUK")
-                                unit: "mm"
-                            }
-
-                            ColumnHeader {
-                                title: qsTr("BÜKÜM")
-                                unit: "°"
-                            }
-
-                            ColumnHeader {
-                                title: qsTr("ROTASYON")
-                                unit: "°"
-                            }
-                        }
-                    }
-
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ListView {
-                            id: list
-
-                            objectName: "programList"
-                            anchors.fill: parent
-                            clip: true
-                            spacing: 4
-                            boundsBehavior: Flickable.StopAtBounds
-                            model: page.program
-
-                            // Bir satır: numara, komut ve değer. Değer yalnızca komutun
-                            // sütununda görünür; değere dokununca tuş takımı açılır.
-                            delegate: Rectangle {
-                                id: stepRow
-
-                                required property int index
-                                required property int command
-                                required property real value
-                                required property bool valid
-
-                                readonly property bool selected: page.currentRow === stepRow.index
-
-                                objectName: "step" + stepRow.index
-                                width: list.width
-                                height: 48
-                                radius: Theme.radius
-                                color: stepRow.selected ? Theme.selection : Theme.field
-                                border.width: stepRow.selected ? 2 : 1
-                                border.color: stepRow.selected ? Theme.navSelected : Theme.panelBorder
-
-                                TapHandler {
-                                    onTapped: page.selectRow(stepRow.index)
-                                }
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 12
-                                    anchors.rightMargin: 6
-                                    spacing: 8
-
-                                    Text {
-                                        Layout.preferredWidth: 30
-                                        text: stepRow.index + 1
-                                        font.pixelSize: Theme.fontNormal
-                                        color: Theme.textMuted
-                                    }
-
-                                    Text {
-                                        Layout.preferredWidth: 104
-                                        text: page.commandName(stepRow.command)
-                                        font.pixelSize: Theme.fontNormal
-                                        font.bold: true
-                                        color: Theme.text
-                                    }
-
-                                    // Üç değer sütunu: İLERLE, BÜK, ROTASYON sırasıyla
-                                    Repeater {
-                                        model: 3
-
-                                        delegate: Item {
-                                            id: cell
-
-                                            required property int index
-
-                                            Layout.fillWidth: true
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-
-                                            T.Button {
-                                                id: valueButton
-
-                                                objectName: "value" + stepRow.index
-                                                anchors.fill: parent
-                                                anchors.topMargin: 5
-                                                anchors.bottomMargin: 5
-                                                visible: cell.index === stepRow.command
-                                                rightPadding: 10
-                                                text: stepRow.value.toFixed(2)
-                                                onClicked: page.editStep(stepRow.index, stepRow.command, stepRow.value)
-
-                                                contentItem: Text {
-                                                    text: valueButton.text
-                                                    font.pixelSize: Theme.fontNormal
-                                                    font.bold: true
-                                                    color: stepRow.valid ? Theme.text : Theme.danger
-                                                    horizontalAlignment: Text.AlignRight
-                                                    verticalAlignment: Text.AlignVCenter
-                                                }
-
-                                                background: Rectangle {
-                                                    radius: Theme.radius
-                                                    color: valueButton.down ? Theme.buttonDown : Theme.field
-                                                    border.width: stepRow.valid ? 1 : 2
-                                                    border.color: stepRow.valid ? Theme.panelBorder : Theme.danger
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Kaydırma göstergesi: liste sığmıyorsa nerede olunduğunu gösterir.
-                        // Satırların üstüne binmesin diye listeyle butonlar arasındaki boşlukta.
-                        Rectangle {
-                            anchors.left: list.right
-                            anchors.leftMargin: 2
-                            y: list.visibleArea.yPosition * list.height
-                            width: 4
-                            height: list.visibleArea.heightRatio * list.height
-                            radius: 2
-                            color: Theme.idle
-                            visible: list.contentHeight > list.height
-                        }
-
-                        Text {
-                            objectName: "emptyHint"
-                            anchors.centerIn: parent
-                            visible: page.program.count === 0
-                            text: qsTr("Program boş. Aşağıdan adım ekleyin.")
-                            font.pixelSize: Theme.fontNormal
-                            color: Theme.textMuted
-                        }
-                    }
+                    program: page.program
+                    editable: true
+                    selectedRow: page.currentRow
+                    emptyText: qsTr("Program boş. Aşağıdan adım ekleyin.")
+                    onRowTapped: row => page.selectRow(row)
+                    onValueClicked: (row, command, value) => page.editStep(row, command, value)
                 }
 
                 // Satır düzenleme: taşıma yukarıda, silme ayrı ve aşağıda
@@ -615,41 +436,5 @@ Rectangle {
         id: keypad
 
         onValueEntered: value => page.applyValue(value)
-    }
-
-    // Tablo başlığındaki sütun adı
-    component HeaderText: Text {
-        font.pixelSize: 13
-        font.bold: true
-        color: Theme.textMuted
-    }
-
-    // Değer sütununun başlığı: üstte ad, altta birim; sağa yaslı (sayılar gibi).
-    component ColumnHeader: Item {
-        id: header
-
-        required property string title
-        required property string unit
-
-        Layout.fillWidth: true
-        Layout.preferredWidth: 1
-        Layout.fillHeight: true
-
-        Column {
-            anchors.right: parent.right
-            anchors.rightMargin: 10
-            anchors.verticalCenter: parent.verticalCenter
-
-            HeaderText {
-                anchors.right: parent.right
-                text: header.title
-            }
-
-            HeaderText {
-                anchors.right: parent.right
-                text: header.unit
-                font.bold: false
-            }
-        }
     }
 }

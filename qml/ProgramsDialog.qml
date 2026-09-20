@@ -9,10 +9,14 @@ import QtQuick.Templates as T
 // Bir programa dokunup AÇ'a basılır (ya da iki kez dokunulur). YENİ boş bir program
 // başlatır, FARKLI KAYDET açık programı yeni bir adla kaydeder, SİL dosyayı siler.
 // Pencere yalnızca isteği bildirir; soruları ve işlemleri ProgramManager yürütür.
+//
+// ÜRETİM sayfasından "yalnızca yükle" olarak açılır (loadOnly): orada program
+// seçilip yüklenir; YENİ, FARKLI KAYDET ve SİL görünmez.
 T.Popup {
     id: dialog
 
     required property ProgramStore store
+    property bool loadOnly: false
 
     // Seçili program (boş: seçim yok) ve açılabilir olup olmadığı
     property string selectedName: ""
@@ -74,7 +78,8 @@ T.Popup {
             spacing: 10
 
             Text {
-                text: qsTr("Programlar")
+                objectName: "programsTitle"
+                text: dialog.loadOnly ? qsTr("Program yükle") : qsTr("Programlar")
                 font.pixelSize: Theme.fontTitle
                 font.bold: true
                 color: Theme.text
@@ -238,6 +243,7 @@ T.Popup {
 
             HmiButton {
                 objectName: "programsNew"
+                visible: !dialog.loadOnly
                 implicitWidth: 100
                 implicitHeight: 56
                 font.pixelSize: 16
@@ -247,6 +253,7 @@ T.Popup {
 
             HmiButton {
                 objectName: "programsSaveAs"
+                visible: !dialog.loadOnly
                 implicitWidth: 170
                 implicitHeight: 56
                 font.pixelSize: 16
@@ -256,6 +263,7 @@ T.Popup {
 
             HmiButton {
                 objectName: "programsRemove"
+                visible: !dialog.loadOnly
                 implicitWidth: 90
                 implicitHeight: 56
                 font.pixelSize: 16
@@ -283,7 +291,7 @@ T.Popup {
                 implicitWidth: 110
                 implicitHeight: 56
                 font.pixelSize: 16
-                text: qsTr("AÇ")
+                text: dialog.loadOnly ? qsTr("YÜKLE") : qsTr("AÇ")
                 accent: Theme.ok
                 filled: true
                 enabled: dialog.selectedName.length > 0 && dialog.selectedReadable

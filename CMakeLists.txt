@@ -37,6 +37,7 @@ qt_add_qml_module(appBoruHmi
         qml/PumpControl.qml
         qml/ActuatorButton.qml
         qml/AxisDisplay.qml
+        qml/ProgramTable.qml
         qml/ProductionPage.qml
         qml/DesignPage.qml
         qml/MotionPage.qml

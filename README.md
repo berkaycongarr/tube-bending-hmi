@@ -63,8 +63,9 @@ uygulama kapatılırsa önce sorulur.
 | `src/program/BendProgram.*` | Büküm programı (reçete): komut listesi, açınım boyu, doğrulama, JSON biçimi |
 | `src/program/ProgramStore.*` | Program deposu: klasördeki dosyalar, aç / kaydet / sil |
 | `qml/Main.qml` | Ana çerçeve: üst şerit, sol menü, sayfalar |
-| `qml/ProductionPage.qml` | Üretim sayfası (şimdilik referans arama) |
+| `qml/ProductionPage.qml` | Üretim sayfası: açık program, üretime hazır mı, program yükleme, referans arama |
 | `qml/DesignPage.qml` | Tasarım sayfası: program tablosu, boru ve kalıp, açınım boyu |
+| `qml/ProgramTable.qml` | Program tablosu (TASARIM'da düzenlenir, ÜRETİM'de yalnızca gösterir) |
 | `qml/ProgramManager.qml` | Program dosya işlemlerinin akışı ve soruları |
 | `qml/ProgramsDialog.qml` | Programlar penceresi: liste, AÇ / YENİ / FARKLI KAYDET / SİL |
 | `qml/NameDialog.qml` | Program adı girme penceresi |

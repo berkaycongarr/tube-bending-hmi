@@ -237,6 +237,8 @@ Window {
 
                 ProductionPage {
                     machine: root.machine
+                    program: root.program
+                    manager: programManager
                 }
 
                 DesignPage {
