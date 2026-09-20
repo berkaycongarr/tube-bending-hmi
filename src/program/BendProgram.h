@@ -4,6 +4,7 @@
 #include <QJsonObject>
 #include <QList>
 #include <QString>
+#include <QVariant>
 #include <QtQml/qqmlregistration.h>
 
 #include <array>
@@ -93,6 +94,11 @@ public:
     double remainingLength() const { return m_tubeLength - developedLength(); } // < 0 ise boru kısa
     int invalidStepCount() const;
     bool isValid() const;
+
+    // Üretimde makineye gönderilen tarif: her adım { "command": 0/1/2, "value": sayı }.
+    // Makine BendProgram'ı tanımaz; ekranın verisi burada makinenin anlayacağı
+    // sade bir listeye çevrilir. Gerçek makinede bu liste PLC'ye yazılacak.
+    Q_INVOKABLE QVariantList recipe() const;
 
     // Program son kayıttan (ya da açılıştan) beri değişti mi? Kaydedilince sıfırlanır.
     bool isModified() const { return m_modified; }

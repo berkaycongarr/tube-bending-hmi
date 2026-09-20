@@ -40,6 +40,8 @@ T.Button {
             return qsTr("Pompa çalışmıyor")
         case Actuator.AxesMoving:
             return qsTr("Eksenler hareketli")
+        case Actuator.CycleRunning:
+            return qsTr("Döngü çalışıyor")
         default:
             return ""
         }

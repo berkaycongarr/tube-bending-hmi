@@ -50,6 +50,42 @@ Kaydetme güvenlidir (`QSaveFile`): önce geçici bir dosyaya yazılır, yazma b
 dosyanın yerine geçer. Kaydedilmemiş değişiklik varken başka program açılırsa ya da
 uygulama kapatılırsa önce sorulur.
 
+Makinenin ürettiği toplam adet de `ayarlar.ini` içinde tutulur: uygulama kapanınca sıfırlanmaz.
+
+## Üretim döngüsü
+
+Parçanın adımlarını **makine** yürütür; ekran yalnızca tarifi (program adımlarını) gönderir,
+START/STOP der ve durumu gösterir. Gerçek makinede bu sıra PLC'nin içindedir: ekran donsa
+bile makine parçayı bitirir. `SimMachine` bunu bir PLC adım zinciri gibi uygular
+(`beginPhase` komutu verir, `updateCycle` her turda "bu aşama bitti mi?" diye bakar).
+
+Bir parçanın sırası:
+
+1. Araba boru alma konumuna (X = 500 mm), büküm kolu başa (B = 0) gider, malafa geri çekilir
+2. Pens açıksa boru beklenir: operatör boruyu takıp pensi kapatır, START'a basar
+3. Malafa ileri çıkar
+4. Program adımları sırayla işlenir:
+   - **İLERLE** (göreli): araba boruyu bu kadar mm ilerletir
+   - **BÜK** (mutlak açı): mengene kapanır → kol açıya döner → mengene açılır → kol başa döner.
+     Büküm sırasında araba yayı takip eder (yay boyu = kalıp yarıçapı × açı), böylece arabanın
+     gittiği toplam yol programın açınım boyuna eşit olur
+   - **ROTASYON** (mutlak açı): boru kendi ekseninde döner
+5. Malafa geri çekilir, pens açılır: parça biter, üretilen ve toplam adet artar
+
+Çalışma modu iki türlüdür ve seçilebilir: **otomatik** (START parçanın tamamını işler) ve
+**yarı otomatik** (START tek adım işler; program denenirken adımlar tek tek görülür).
+Mod, döngü çalışırken değişmez.
+
+Döngü şu durumlarda başlamaz: makine referanssız, pompa durmuş, mengene kapalı ya da boru
+beklenirken pens açık. Döngü sırasında elle kumanda (jog, konuma git, silindirler, referans
+arama) kilitlidir; STOP döngüyü keser. Basınç kesilirse ya da bir aşama beklenen sürede
+bitmezse döngü arızayla durur; silindirler olduğu gibi kalır — yarıda kalan bir parçada
+mengenenin kendiliğinden açılması tehlikelidir, kararı operatör verir.
+
+Varsayımlar (demoda müşteriye sorulacak): boru alma konumu, büküm sırasında ilerleme,
+malafalı büküm, adım arası duraklama ve zaman aşımı süreleri, BÜK ile ROTASYON değerlerinin
+mutlak olması. Hepsi `src/machine/SimParameters.h` içindedir.
+
 ## Klasör yapısı
 
 | Dosya | Görevi |

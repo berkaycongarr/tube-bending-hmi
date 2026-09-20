@@ -1,6 +1,18 @@
 #include "SimMachine.h"
 
+#include <QtMath>
+
 #include <cmath>
+
+namespace {
+
+// Tarifteki komut numaraları. Makine, programın sınıfını (BendProgram) tanımaz:
+// ekran adımları sayı olarak gönderir, sözleşme IMachine.h'de yazılıdır.
+constexpr int FeedCommand = 0;   // İLERLE (göreli, mm)
+constexpr int BendCommand = 1;   // BÜK (mutlak açı, derece)
+constexpr int RotateCommand = 2; // ROTASYON (mutlak açı, derece)
+
+} // namespace
 
 SimMachine::SimMachine(QObject *parent)
     : IMachine(parent)
@@ -71,8 +83,11 @@ void SimMachine::startHoming()
 
 void SimMachine::stop()
 {
-    // STOP her eksen hareketini keser. Pompanın kendi START/STOP'u vardır;
-    // bu STOP pompayı ve silindirleri etkilemez.
+    // STOP her eksen hareketini keser ve üretim döngüsünü iptal eder. Pompanın
+    // kendi START/STOP'u vardır; bu STOP pompayı ve silindirleri etkilemez.
+    if (cycleState() != CycleStopped)
+        abortCycle(NoFault); // operatörün kararı: arıza sayılmaz
+
     haltAllMotion();
 
     if (state() == Homing) {
@@ -135,20 +150,15 @@ void SimMachine::moveTo(Axis *axis, double target)
     if (!sim || state() != Ready || !axis->isHomed())
         return;
 
-    // Kilitli eksen hareket edemez.
+    // Kilitli eksen hareket edemez (mengene boruyu tutuyor ya da döngü çalışıyor).
     updateInterlocks();
     if (axis->interlock() != Axis::NoInterlock)
         return;
 
     // Ekran aralık dışı değeri zaten kabul etmez; makine yine de kendisi kontrol
     // eder. Gerçek PLC de ekrandan gelen değere körü körüne güvenmez.
-    if (!std::isfinite(target) || target < sim->params.minPosition || target > sim->params.maxPosition)
-        return;
-
     // Yeni komut eskisinin yerini alır: süren bir jog varsa iptal olur.
-    sim->jogDirection = 0;
-    sim->moveTarget = target;
-    sim->positioning = true;
+    startMove(*sim, target);
 }
 
 void SimMachine::startPump()
@@ -177,6 +187,79 @@ void SimMachine::setActuator(Actuator *actuator, bool on)
     updateInterlocks();
 }
 
+void SimMachine::startCycle(const QVariantList &recipe, double dieRadius)
+{
+    // Makinenin kendi denetimi: ekran engellemiş olsa da makine yine bakar.
+    updateInterlocks();
+    if (startBlock() != StartReady)
+        return;
+
+    // Bekleyen bir döngü varsa START "devam et" demektir.
+    if (cycleState() == CycleWaiting) {
+        if (waitReason() == WaitTube) {
+            // Boru takıldı, pens kapandı: kaldığı aşamadan devam.
+            setCycle(CycleRunning, NotWaiting, -1, stepCount());
+            beginPhase(m_resumePhase);
+            return;
+        }
+        if (waitReason() == WaitStep) {
+            // Yarı otomatik: sıradaki adım.
+            setCycle(CycleRunning, NotWaiting, m_stepIndex, stepCount());
+            beginStep();
+            return;
+        }
+        // WaitPart: parça bitmişti, yenisi baştan başlar (tarif yeniden okunur).
+    }
+
+    // Tarifi makineye yaz. Gerçek makinede bu, adımların PLC'ye aktarılmasıdır.
+    m_recipe.clear();
+    bool hasBend = false;
+    for (const QVariant &item : recipe) {
+        const QVariantMap map = item.toMap();
+        RecipeStep step;
+        step.command = map.value(QStringLiteral("command")).toInt();
+        step.value = map.value(QStringLiteral("value")).toDouble();
+
+        // Ekrandan gelen her şey denetlenir: tanınmayan komut ya da sayı olmayan
+        // değer makineyi çalıştırmaz.
+        if (step.command < FeedCommand || step.command > RotateCommand
+            || !std::isfinite(step.value)) {
+            m_recipe.clear();
+            abortCycle(FaultRecipe);
+            return;
+        }
+        hasBend = hasBend || step.command == BendCommand;
+        m_recipe.append(step);
+    }
+
+    // Büküm varsa kalıp yarıçapı da gerekir: yay boyu ondan hesaplanır.
+    if (m_recipe.isEmpty() || (hasBend && !(dieRadius > 0.0))) {
+        m_recipe.clear();
+        abortCycle(FaultRecipe);
+        return;
+    }
+    m_dieRadius = dieRadius;
+
+    // Araba, boru alma konumundan açınım boyu kadar daha ilerleyecek: yol yetiyor mu?
+    // (Gerçek makinede de tarif, eksen limitlerine sığmalıdır.)
+    if (SimParameters::LoadPositionX + recipeTravel() > m_axes[0].params.maxPosition) {
+        m_recipe.clear();
+        abortCycle(FaultLimit);
+        return;
+    }
+
+    m_stepIndex = 0;
+    m_resumePhase = Phase::None;
+    setCycleFault(NoFault);
+    setCycle(CycleRunning, NotWaiting, -1, int(m_recipe.size()));
+    beginPhase(Phase::ToLoadPosition);
+}
+
+void SimMachine::resetPartCount()
+{
+    clearPartCount();
+}
+
 // ---------------------------------------------------------------------------
 // Döngü
 // ---------------------------------------------------------------------------
@@ -187,8 +270,9 @@ void SimMachine::tick()
     // takılırsa her şey ileri zıplamasın diye en fazla 0.1 sn alıyoruz.
     const double dt = qMin(m_clock.restart() / 1000.0, 0.1);
 
-    // PLC gibi: önce girişleri ve hidroliği güncelle, kilitleri hesapla,
-    // sonra eksenleri hareket ettir ve kilitleri yeniden hesapla.
+    // PLC gibi: önce girişleri ve hidroliği güncelle, kilitleri hesapla, sonra
+    // eksenleri hareket ettir. Üretim döngüsü en son bakar: o turda eksenler
+    // nereye geldiyse ona göre bir sonraki adıma geçer.
     updatePump(dt);
     updateActuators(dt);
     updateInterlocks();
@@ -196,8 +280,9 @@ void SimMachine::tick()
     if (state() == Homing)
         updateHoming(dt);
     else
-        updateManualMotion(dt);
+        updateMotion(dt);
 
+    updateCycle(dt);
     updateInterlocks();
 }
 
@@ -255,21 +340,55 @@ void SimMachine::updateInterlocks()
     const bool axesBusy = state() == Homing || axisX()->isMoving() || axisA()->isMoving()
                           || axisY()->isMoving();
 
+    // Kural 0: üretim döngüsü çalışırken eksenleri ve silindirleri makine sürer;
+    // elle kumanda kilitlidir. (Kilit elle kumanda içindir: döngünün kendi
+    // hareketleri bu kilide takılmaz.)
+    const bool cycleRunning = cycleState() == CycleRunning;
+
     // Kural 1: mengene boruyu tutarken X (ilerletme) ve A (rotasyon) hareket edemez;
     // boru kıskaçtayken çekilir ya da burulur. Y (öteleme) de kilitlenir: sıkılı boruyu
     // yana kaydırmak boruyu zorlar (güvenli taraftaki varsayım). B (büküm) serbesttir.
-    const Axis::Interlock axisLock = clampHolding ? Axis::ClampClosed : Axis::NoInterlock;
+    const Axis::Interlock axisLock = cycleRunning ? Axis::CycleRunning
+                                     : clampHolding ? Axis::ClampClosed
+                                                    : Axis::NoInterlock;
     axisX()->setInterlock(axisLock);
     axisA()->setInterlock(axisLock);
     axisY()->setInterlock(axisLock);
+    axisB()->setInterlock(cycleRunning ? Axis::CycleRunning : Axis::NoInterlock);
 
     // Kural 2: basınç yoksa hiçbir silindir kumanda edilemez.
     // Kural 3: X, A ya da Y hareket ederken mengene kumanda edilemez.
-    clamp()->setInterlock(!pumpOk ? Actuator::PumpOff
-                          : axesBusy ? Actuator::AxesMoving
-                                     : Actuator::NoInterlock);
-    mandrel()->setInterlock(pumpOk ? Actuator::NoInterlock : Actuator::PumpOff);
-    collet()->setInterlock(pumpOk ? Actuator::NoInterlock : Actuator::PumpOff);
+    const Actuator::Interlock actuatorLock = cycleRunning ? Actuator::CycleRunning
+                                             : pumpOk     ? Actuator::NoInterlock
+                                                          : Actuator::PumpOff;
+    clamp()->setInterlock(cycleRunning ? Actuator::CycleRunning
+                          : !pumpOk    ? Actuator::PumpOff
+                          : axesBusy   ? Actuator::AxesMoving
+                                       : Actuator::NoInterlock);
+    mandrel()->setInterlock(actuatorLock);
+    collet()->setInterlock(actuatorLock);
+
+    updateStartBlock();
+}
+
+// Döngü başlatılabilir mi? Ekranın START butonu bunu gösterir; makine yine de
+// startCycle içinde kendisi bakar (ekrana körü körüne güvenilmez).
+void SimMachine::updateStartBlock()
+{
+    StartBlock block = StartReady;
+
+    if (cycleState() == CycleRunning)
+        block = BlockRunning;
+    else if (state() != Ready)
+        block = BlockNotHomed; // referanssız makinede konumlar bilinmez
+    else if (pumpState() != PumpRunning)
+        block = BlockPumpOff; // mengene, malafa ve pens basınçsız çalışmaz
+    else if (cycleState() == CycleWaiting && waitReason() == WaitTube && !actuatorAt(collet(), true))
+        block = BlockColletOpen; // boru bekleniyor: önce pens kapatılmalı
+    else if (clamp()->command() || clamp()->state() != Actuator::Off)
+        block = BlockClampClosed; // mengene kapalıyken araba boru alma konumuna gidemez
+
+    setStartBlock(block);
 }
 
 void SimMachine::updateHoming(double dt)
@@ -317,13 +436,15 @@ void SimMachine::updateHoming(double dt)
     }
 }
 
-void SimMachine::updateManualMotion(double dt)
+void SimMachine::updateMotion(double dt)
 {
     for (SimAxis &sim : m_axes) {
         Axis *axis = sim.axis;
 
-        // Güvenlik: kilitlenmiş eksen hareket ediyorsa hemen durdur.
-        if (axis->interlock() != Axis::NoInterlock && (sim.positioning || sim.jogDirection != 0)) {
+        // Güvenlik: kilitlenmiş eksen hareket ediyorsa hemen durdur. Kilit elle
+        // kumanda kuralıdır; hareketi döngü başlattıysa makine kendi işini yapar.
+        if (!sim.cycleMove && axis->interlock() != Axis::NoInterlock
+            && (sim.positioning || sim.jogDirection != 0)) {
             haltMotion(sim);
             continue;
         }
@@ -331,7 +452,8 @@ void SimMachine::updateManualMotion(double dt)
         // Konuma git: hedefe sabit hızla ilerle, varınca tam hedefte dur.
         if (sim.positioning) {
             const double remaining = sim.moveTarget - axis->position();
-            const double step = sim.params.moveSpeed * dt;
+            const double speed = sim.moveSpeed > 0.0 ? sim.moveSpeed : sim.params.moveSpeed;
+            const double step = speed * dt;
             if (std::abs(remaining) <= step) {
                 axis->setPosition(sim.moveTarget);
                 haltMotion(sim);
@@ -377,8 +499,325 @@ void SimMachine::updateManualMotion(double dt)
 }
 
 // ---------------------------------------------------------------------------
+// Üretim döngüsü
+//
+// Döngüyü makine yürütür; ekran yalnızca tarifi gönderir, START/STOP der ve
+// durumu gösterir. Gerçek makinede bu sıra PLC'nin içindedir: ekran donsa ya da
+// kapansa bile makine parçayı bitirir. Aşağıdaki iki fonksiyon bir PLC adım
+// zincirinin (step chain) karşılığıdır:
+//   beginPhase  aşamaya girerken komutları verir (hedefi, valfi)
+//   updateCycle her turda "bu aşama bitti mi?" diye bakar, bittiyse ilerler
+// ---------------------------------------------------------------------------
+
+void SimMachine::updateCycle(double dt)
+{
+    if (cycleState() != CycleRunning)
+        return;
+
+    // Basınç kesilirse ne mengene ne malafa çalışır: döngü sürdürülemez.
+    if (pumpState() != PumpRunning) {
+        abortCycle(FaultPressure);
+        return;
+    }
+
+    // Her aşamanın bir üst süresi var: beklenen olay gelmezse döngü arızayla
+    // durur. Sensörü bozuk bir makinenin sonsuza kadar beklemesi tehlikelidir.
+    m_phaseTime += dt;
+    if (m_phaseTimeout > 0.0 && m_phaseTime > m_phaseTimeout) {
+        abortCycle(FaultTimeout);
+        return;
+    }
+
+    const SimAxis &feed = m_axes[0];
+    const SimAxis &bend = m_axes[1];
+    const SimAxis &rotate = m_axes[2];
+
+    switch (m_phase) {
+    case Phase::None:
+        break;
+
+    case Phase::ToLoadPosition:
+        if (!axisIdle(feed) || !axisIdle(bend) || !actuatorAt(mandrel(), false))
+            break;
+        // Boru takılı mı? Pens açıksa operatör beklenir.
+        if (!actuatorAt(collet(), true)) {
+            m_resumePhase = Phase::MandrelOut;
+            waitForOperator(WaitTube);
+            break;
+        }
+        beginPhase(Phase::MandrelOut);
+        break;
+
+    case Phase::MandrelOut:
+        if (!SimParameters::MandrelInCycle || actuatorAt(mandrel(), true))
+            beginStep();
+        break;
+
+    case Phase::Feed:
+        if (axisIdle(feed))
+            stepFinished();
+        break;
+
+    case Phase::ClampClose:
+        if (actuatorAt(clamp(), true))
+            beginPhase(Phase::Bend);
+        break;
+
+    case Phase::Bend:
+        followBend();
+        if (axisIdle(bend))
+            beginPhase(Phase::ClampOpen);
+        break;
+
+    case Phase::ClampOpen:
+        if (actuatorAt(clamp(), false))
+            beginPhase(Phase::BendHome);
+        break;
+
+    case Phase::BendHome:
+        if (axisIdle(bend))
+            stepFinished();
+        break;
+
+    case Phase::Rotate:
+        if (axisIdle(rotate))
+            stepFinished();
+        break;
+
+    case Phase::StepPause:
+        if (m_phaseTime >= SimParameters::StepPauseSeconds)
+            beginStep();
+        break;
+
+    case Phase::MandrelBack:
+        if (actuatorAt(mandrel(), false))
+            beginPhase(Phase::ColletOpen);
+        break;
+
+    case Phase::ColletOpen:
+        if (!actuatorAt(collet(), false))
+            break;
+        // Parça bitti: sayaçlar artar, operatör parçayı alıp START'a basar.
+        countPart();
+        waitForOperator(WaitPart);
+        break;
+    }
+}
+
+void SimMachine::beginPhase(Phase phase)
+{
+    m_phase = phase;
+    m_phaseTime = 0.0;
+    m_phaseTimeout = 0.0;
+
+    SimAxis &feed = m_axes[0];
+    SimAxis &bend = m_axes[1];
+    SimAxis &rotate = m_axes[2];
+
+    // İşlenen adımın değeri (aşama bir adıma ait değilse kullanılmaz).
+    const RecipeStep step = m_stepIndex >= 0 && m_stepIndex < m_recipe.size()
+                                ? m_recipe.at(m_stepIndex)
+                                : RecipeStep {};
+
+    switch (phase) {
+    case Phase::None:
+        break;
+
+    case Phase::ToLoadPosition:
+        // Parçanın başı: malafa geri çekilir, büküm kolu başa döner, araba boru
+        // alma konumuna gider. Böylece her parça aynı yerden başlar.
+        mandrel()->setCommand(false);
+        m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
+        if (!startMove(feed, SimParameters::LoadPositionX) || !startMove(bend, 0.0))
+            abortCycle(FaultLimit);
+        break;
+
+    case Phase::MandrelOut:
+        if (SimParameters::MandrelInCycle)
+            mandrel()->setCommand(true);
+        m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
+        break;
+
+    case Phase::Feed:
+        // İLERLE göreli: araba bulunduğu yerden bu kadar daha ilerler.
+        m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
+        if (!startMove(feed, feed.axis->position() + step.value))
+            abortCycle(FaultLimit);
+        break;
+
+    case Phase::ClampClose:
+        clamp()->setCommand(true);
+        m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
+        break;
+
+    case Phase::Bend:
+        // Büküm sırasında araba yayı takip edecek: başlangıç noktaları saklanır.
+        m_bendStartX = feed.axis->position();
+        m_bendStartAngle = bend.axis->position();
+        m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
+        if (!startMove(bend, step.value))
+            abortCycle(FaultLimit);
+        break;
+
+    case Phase::ClampOpen:
+        clamp()->setCommand(false);
+        m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
+        break;
+
+    case Phase::BendHome:
+        // Kol başa döner; boru olduğu yerde kalır (araba geri gelmez).
+        m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
+        if (!startMove(bend, 0.0))
+            abortCycle(FaultLimit);
+        break;
+
+    case Phase::Rotate:
+        m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
+        if (!startMove(rotate, step.value))
+            abortCycle(FaultLimit);
+        break;
+
+    case Phase::StepPause:
+        break; // yalnızca süre bekler
+
+    case Phase::MandrelBack:
+        mandrel()->setCommand(false);
+        m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
+        break;
+
+    case Phase::ColletOpen:
+        collet()->setCommand(false);
+        m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
+        break;
+    }
+}
+
+void SimMachine::beginStep()
+{
+    // Adım kalmadıysa parça biter.
+    if (m_stepIndex < 0 || m_stepIndex >= m_recipe.size()) {
+        beginPhase(Phase::MandrelBack);
+        return;
+    }
+
+    setCycle(CycleRunning, NotWaiting, m_stepIndex, int(m_recipe.size()));
+
+    switch (m_recipe.at(m_stepIndex).command) {
+    case BendCommand:
+        beginPhase(Phase::ClampClose); // büküm: mengene → bük → mengene aç → kol başa
+        break;
+    case RotateCommand:
+        beginPhase(Phase::Rotate);
+        break;
+    default:
+        beginPhase(Phase::Feed);
+        break;
+    }
+}
+
+void SimMachine::stepFinished()
+{
+    ++m_stepIndex;
+
+    if (m_stepIndex >= m_recipe.size()) {
+        beginPhase(Phase::MandrelBack); // son adım bitti: parça tamamlanıyor
+        return;
+    }
+
+    // Yarı otomatikte her adımdan sonra operatör beklenir: program denenirken
+    // adımlar tek tek görülür. Otomatikte kısa bir duraklamayla devam edilir.
+    if (cycleMode() == SemiAutomaticCycle)
+        waitForOperator(WaitStep);
+    else
+        beginPhase(Phase::StepPause);
+}
+
+void SimMachine::waitForOperator(WaitReason reason)
+{
+    m_phase = Phase::None;
+    m_phaseTime = 0.0;
+    m_phaseTimeout = 0.0;
+
+    // Adım beklenirken sıradaki adım gösterilir; boru ve parça beklenirken adım yok.
+    const int step = reason == WaitStep ? m_stepIndex : -1;
+    setCycle(CycleWaiting, reason, step, int(m_recipe.size()));
+}
+
+void SimMachine::abortCycle(CycleFault fault)
+{
+    // Hareket kesilir; silindirler olduğu gibi kalır. Yarıda kalan bir parçada
+    // mengenenin kendiliğinden açılması tehlikelidir: kararı operatör verir.
+    haltAllMotion();
+    m_phase = Phase::None;
+    m_resumePhase = Phase::None;
+    m_phaseTime = 0.0;
+    m_phaseTimeout = 0.0;
+    setCycle(CycleStopped, NotWaiting, -1, int(m_recipe.size()));
+    setCycleFault(fault);
+}
+
+void SimMachine::followBend()
+{
+    if (!SimParameters::FeedDuringBend)
+        return;
+
+    // Boru kalıba sarıldıkça arkadan boru "yutulur": araba, yayın harcadığı boy
+    // kadar ilerler (yay boyu = kalıp yarıçapı × açı). Bu, makinenin kendi
+    // hareketidir; mengene kilidi elle kumanda içindir, buna takılmaz.
+    SimAxis &feed = m_axes[0];
+    const SimAxis &bend = m_axes[1];
+    const double arc = m_dieRadius
+                       * qDegreesToRadians(bend.axis->position() - m_bendStartAngle);
+    feed.axis->setPosition(
+        qBound(feed.params.minPosition, m_bendStartX + arc, feed.params.maxPosition));
+    feed.axis->setMoving(!axisIdle(bend));
+    updateLimitState(feed);
+}
+
+double SimMachine::recipeTravel() const
+{
+    // Arabanın parça boyunca gideceği toplam yol: düz parçalar + (büküm sırasında
+    // ilerliyorsa) yay boyları. Programın açınım boyunun karşılığıdır.
+    double travel = 0.0;
+    for (const RecipeStep &step : m_recipe) {
+        if (step.command == FeedCommand)
+            travel += step.value;
+        else if (step.command == BendCommand && SimParameters::FeedDuringBend)
+            travel += m_dieRadius * qDegreesToRadians(step.value);
+    }
+    return travel;
+}
+
+// ---------------------------------------------------------------------------
 // Yardımcılar
 // ---------------------------------------------------------------------------
+
+bool SimMachine::startMove(SimAxis &sim, double target, double speed)
+{
+    // Limit dışındaki hedef reddedilir: hareket hiç başlamaz.
+    if (!std::isfinite(target) || target < sim.params.minPosition
+        || target > sim.params.maxPosition)
+        return false;
+
+    sim.jogDirection = 0;
+    sim.moveTarget = target;
+    sim.moveSpeed = speed;
+    // Hareketi döngü mü başlattı? (Döngü çalışırken elle komut zaten kabul edilmez.)
+    sim.cycleMove = cycleState() == CycleRunning;
+    sim.positioning = true;
+    return true;
+}
+
+bool SimMachine::axisIdle(const SimAxis &sim) const
+{
+    return !sim.positioning && sim.jogDirection == 0;
+}
+
+bool SimMachine::actuatorAt(const Actuator *actuator, bool on) const
+{
+    // Sensör ne diyor? Komut değil, silindirin gerçekten yerine gitmesi beklenir.
+    return actuator->state() == (on ? Actuator::On : Actuator::Off);
+}
 
 SimMachine::SimAxis *SimMachine::simAxis(Axis *axis)
 {
@@ -402,6 +841,8 @@ void SimMachine::haltMotion(SimAxis &sim)
 {
     sim.jogDirection = 0;
     sim.positioning = false;
+    sim.moveSpeed = 0.0;
+    sim.cycleMove = false;
     sim.axis->setMoving(false);
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QVariant>
 #include <QtQml/qqmlregistration.h>
 
 #include "Actuator.h"
@@ -30,6 +31,15 @@ class IMachine : public QObject
     Q_PROPERTY(Actuator *clamp READ clamp CONSTANT)
     Q_PROPERTY(Actuator *mandrel READ mandrel CONSTANT)
     Q_PROPERTY(Actuator *collet READ collet CONSTANT)
+    Q_PROPERTY(CycleState cycleState READ cycleState NOTIFY cycleChanged)
+    Q_PROPERTY(WaitReason waitReason READ waitReason NOTIFY cycleChanged)
+    Q_PROPERTY(CycleFault cycleFault READ cycleFault NOTIFY cycleChanged)
+    Q_PROPERTY(int currentStep READ currentStep NOTIFY cycleChanged)
+    Q_PROPERTY(int stepCount READ stepCount NOTIFY cycleChanged)
+    Q_PROPERTY(StartBlock startBlock READ startBlock NOTIFY startBlockChanged)
+    Q_PROPERTY(CycleMode cycleMode READ cycleMode WRITE setCycleMode NOTIFY cycleModeChanged)
+    Q_PROPERTY(int partCount READ partCount NOTIFY countersChanged)
+    Q_PROPERTY(int totalCount READ totalCount NOTIFY countersChanged)
 
 public:
     enum State {
@@ -46,6 +56,49 @@ public:
         PumpStopping  // durduruldu, basınç düşüyor
     };
     Q_ENUM(PumpState)
+
+    // Üretim döngüsü. Adımları makine yürütür (gerçek makinede PLC); ekran
+    // yalnızca tarifi gönderir, START/STOP der ve durumu gösterir.
+    enum CycleState {
+        CycleStopped, // döngü yok
+        CycleRunning, // çalışıyor
+        CycleWaiting  // operatörü bekliyor (START)
+    };
+    Q_ENUM(CycleState)
+
+    enum WaitReason {
+        NotWaiting,
+        WaitTube, // boru takılıp pens kapatılmalı
+        WaitStep, // yarı otomatik: adım bitti, sıradaki için START
+        WaitPart  // parça bitti, yenisi için START
+    };
+    Q_ENUM(WaitReason)
+
+    // Döngü neden başlatılamıyor? (makinenin kendi denetimi)
+    enum StartBlock {
+        StartReady,       // başlatılabilir
+        BlockRunning,     // zaten çalışıyor
+        BlockNotHomed,    // referans yok
+        BlockPumpOff,     // hidrolik pompa çalışmıyor
+        BlockClampClosed, // mengene kapalı: önce açılmalı
+        BlockColletOpen   // boru beklenirken pens hâlâ açık
+    };
+    Q_ENUM(StartBlock)
+
+    enum CycleFault {
+        NoFault,
+        FaultTimeout, // adım beklenen sürede bitmedi
+        FaultLimit,   // tarif eksen limitlerine sığmıyor
+        FaultRecipe,  // tarif boş ya da hatalı
+        FaultPressure // döngü sırasında hidrolik basınç kesildi
+    };
+    Q_ENUM(CycleFault)
+
+    enum CycleMode {
+        AutomaticCycle,    // START: parçanın bütün adımları
+        SemiAutomaticCycle // START: tek adım (program denerken)
+    };
+    Q_ENUM(CycleMode)
 
     explicit IMachine(QObject *parent = nullptr)
         : QObject(parent)
@@ -101,10 +154,55 @@ public:
     // (on = true), ikinci basış geri alır. Komutu makine hatırlar.
     Q_INVOKABLE virtual void setActuator(Actuator *actuator, bool on) = 0;
 
+    // Üretim döngüsü -------------------------------------------------------
+    // START: tarifi (program adımlarını) makineye gönderir ve döngüyü başlatır
+    // ya da bekleyen döngüye devam eder. Gerçek makinede tarif PLC'ye yazılır.
+    // Her adım { "command": 0/1/2, "value": sayı }; dieRadius takılı kalıbın yarıçapı.
+    //   0 İLERLE   : boruyu bu kadar mm ilerlet (göreli)
+    //   1 BÜK      : büküm kolunu bu açıya çevir (mutlak, 0'dan başlar)
+    //   2 ROTASYON : boruyu bu açıya döndür (mutlak; müşteriye sorulacak varsayım)
+    Q_INVOKABLE virtual void startCycle(const QVariantList &recipe, double dieRadius) = 0;
+    Q_INVOKABLE virtual void resetPartCount() = 0; // üretilen adet sayacını sıfırla
+
+    // Döngü durumu
+    CycleState cycleState() const { return m_cycleState; }
+    WaitReason waitReason() const { return m_waitReason; }
+    CycleFault cycleFault() const { return m_cycleFault; }
+    int currentStep() const { return m_currentStep; } // çalışan adım (-1: yok)
+    int stepCount() const { return m_stepCount; }     // tarifteki adım sayısı
+    StartBlock startBlock() const { return m_startBlock; }
+    int partCount() const { return m_partCount; }   // bu programda üretilen adet
+    int totalCount() const { return m_totalCount; } // makinenin toplam adedi
+
+    CycleMode cycleMode() const { return m_cycleMode; }
+
+    // Mod yalnızca döngü çalışmıyorken değişir: yarısında değiştirmek operatör
+    // için de makine için de karışıklık yaratır.
+    void setCycleMode(CycleMode mode)
+    {
+        if (m_cycleMode == mode || m_cycleState == CycleRunning)
+            return;
+        m_cycleMode = mode;
+        emit cycleModeChanged();
+    }
+
+    // Toplam adet makine kapanınca kaybolmaz: açılışta geri yüklenir.
+    void setTotalCount(int count)
+    {
+        if (m_totalCount == count)
+            return;
+        m_totalCount = count;
+        emit countersChanged();
+    }
+
 signals:
     void stateChanged();
     void pumpStateChanged();
     void pressureChanged();
+    void cycleChanged();      // döngü durumu, adım ya da arıza değişti
+    void cycleModeChanged();
+    void startBlockChanged();
+    void countersChanged();
 
 protected:
     // Bu değerleri yalnızca alt sınıflar değiştirebilir.
@@ -132,10 +230,63 @@ protected:
         emit pressureChanged();
     }
 
+    void setCycle(CycleState state, WaitReason reason, int step, int stepCount)
+    {
+        if (m_cycleState == state && m_waitReason == reason && m_currentStep == step
+            && m_stepCount == stepCount)
+            return;
+        m_cycleState = state;
+        m_waitReason = reason;
+        m_currentStep = step;
+        m_stepCount = stepCount;
+        emit cycleChanged();
+    }
+
+    void setCycleFault(CycleFault fault)
+    {
+        if (m_cycleFault == fault)
+            return;
+        m_cycleFault = fault;
+        emit cycleChanged();
+    }
+
+    void setStartBlock(StartBlock block)
+    {
+        if (m_startBlock == block)
+            return;
+        m_startBlock = block;
+        emit startBlockChanged();
+    }
+
+    // Bir parça bitti: iki sayaç da artar.
+    void countPart()
+    {
+        ++m_partCount;
+        ++m_totalCount;
+        emit countersChanged();
+    }
+
+    void clearPartCount()
+    {
+        if (m_partCount == 0)
+            return;
+        m_partCount = 0;
+        emit countersChanged();
+    }
+
 private:
     State m_state = NotHomed;
     PumpState m_pumpState = PumpStopped;
     double m_pressure = 0.0;
+    CycleState m_cycleState = CycleStopped;
+    WaitReason m_waitReason = NotWaiting;
+    CycleFault m_cycleFault = NoFault;
+    CycleMode m_cycleMode = AutomaticCycle;
+    StartBlock m_startBlock = BlockNotHomed;
+    int m_currentStep = -1;
+    int m_stepCount = 0;
+    int m_partCount = 0;
+    int m_totalCount = 0;
     Axis *const m_axisX;
     Axis *const m_axisB;
     Axis *const m_axisA;

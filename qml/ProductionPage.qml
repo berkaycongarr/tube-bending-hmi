@@ -12,10 +12,19 @@ Rectangle {
     required property BendProgram program
     required property ProgramManager manager
 
-    // Mengene boruyu tutuyorsa X, A ve Y kilitlidir; referans arama da kilitlenir.
-    readonly property bool clampLocked: page.machine.axisX.interlock !== Axis.NoInterlock
-                                        || page.machine.axisA.interlock !== Axis.NoInterlock
-                                        || page.machine.axisY.interlock !== Axis.NoInterlock
+    // Mengene boruyu tutuyorsa ya da üretim döngüsü çalışıyorsa X, A ve Y
+    // kilitlidir; bu eksenler hareket ettiği için referans arama da kilitlenir.
+    readonly property bool axesLocked: page.machine.axisX.interlock !== Axis.NoInterlock
+                                       || page.machine.axisA.interlock !== Axis.NoInterlock
+                                       || page.machine.axisY.interlock !== Axis.NoInterlock
+
+    readonly property string homeLockReason: {
+        if (!page.axesLocked)
+            return ""
+        if (page.machine.axisX.interlock === Axis.CycleRunning)
+            return qsTr("Kilitli: üretim döngüsü çalışıyor")
+        return qsTr("Kilitli: referans aramak için önce mengeneyi açın")
+    }
 
     // Programın kendi sorunları (makineden bağımsız)
     readonly property string programProblems: {
@@ -250,16 +259,16 @@ Rectangle {
                 font.pixelSize: 16
                 text: page.machine.state === Machine.Ready ? qsTr("TEKRAR REFERANS ARA")
                                                            : qsTr("REFERANS ARA (HOME)")
-                enabled: page.machine.state !== Machine.Homing && !page.clampLocked
+                enabled: page.machine.state !== Machine.Homing && !page.axesLocked
                 onClicked: page.machine.startHoming()
             }
 
-            // Referans aramada X, A ve Y hareket eder; mengene boruyu tutuyorsa aranamaz.
+            // Referans aramada X, A ve Y hareket eder; kilitliyken aranamaz.
             Text {
                 objectName: "homeLockHint"
                 Layout.fillWidth: true
-                visible: page.clampLocked && page.machine.state !== Machine.Homing
-                text: qsTr("Kilitli: referans aramak için önce mengeneyi açın")
+                visible: page.axesLocked && page.machine.state !== Machine.Homing
+                text: page.homeLockReason
                 font.pixelSize: Theme.fontSmall
                 font.bold: true
                 color: Theme.activeText

@@ -37,7 +37,8 @@ public:
     enum Interlock {
         NoInterlock, // kilit yok, kumanda edilebilir
         PumpOff,     // pompa çalışmıyor: basınç yok
-        AxesMoving   // eksenler hareket ediyor (yalnızca mengene için)
+        AxesMoving,  // eksenler hareket ediyor (yalnızca mengene için)
+        CycleRunning // üretim döngüsü çalışıyor: silindirleri makine sürüyor
     };
     Q_ENUM(Interlock)
 

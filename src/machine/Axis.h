@@ -37,7 +37,8 @@ public:
     // Hareket neden kilitli?
     enum Interlock {
         NoInterlock, // kilit yok, hareket edebilir
-        ClampClosed  // mengene boruyu tutuyor (X, A ve Y için)
+        ClampClosed, // mengene boruyu tutuyor (X, A ve Y için)
+        CycleRunning // üretim döngüsü çalışıyor: eksenleri makine sürüyor
     };
     Q_ENUM(Interlock)
 

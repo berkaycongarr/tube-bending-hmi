@@ -146,6 +146,19 @@ bool BendProgram::isValid() const
     return count() > 0 && invalidStepCount() == 0 && remainingLength() >= -0.001;
 }
 
+QVariantList BendProgram::recipe() const
+{
+    QVariantList steps;
+    steps.reserve(m_steps.size());
+    for (const Step &step : m_steps) {
+        steps.append(QVariantMap {
+            { QStringLiteral("command"), int(step.command) },
+            { QStringLiteral("value"), step.value },
+        });
+    }
+    return steps;
+}
+
 void BendProgram::setModified(bool modified)
 {
     if (m_modified == modified)

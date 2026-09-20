@@ -29,6 +29,14 @@ inline constexpr AxisParameters B = {    0.0,  190.0,     37.5,      0.0,      9
 inline constexpr AxisParameters A = { -360.0,  360.0,     90.0,      0.0,      90.0,      12.0,    12.0,      10.0,      60.0,       90.0 };
 inline constexpr AxisParameters Y = {    0.0,  150.0,     42.0,      0.0,      30.0,       5.0,     5.0,       5.0,      25.0,       40.0 };
 
+// Üretim döngüsü. Bu değerler de varsayım; demoda müşteriye sorulacak.
+inline constexpr double LoadPositionX = 500.0;      // boru alma konumu (müşterinin ekranında da var)
+inline constexpr bool FeedDuringBend = true;        // büküm sırasında araba yayı takip eder
+inline constexpr bool MandrelInCycle = true;        // malafalı büküm
+inline constexpr double StepPauseSeconds = 0.3;     // adımlar arasında kısa duraklama
+inline constexpr double MoveTimeoutSeconds = 45.0;  // eksen hareketi bu sürede bitmezse arıza
+inline constexpr double ActuatorTimeoutSeconds = 8.0; // silindir bu sürede yerine gitmezse arıza
+
 inline constexpr int TickIntervalMs = 20;   // döngü aralığı: saniyede 50 tur
 inline constexpr double LatchSeconds = 0.5; // referans noktasında bekleme süresi (sn)
 inline constexpr int JogWatchdogMs = 300;   // bu süre "hâlâ basılı" gelmezse jog durur

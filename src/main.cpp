@@ -48,6 +48,12 @@ int main(int argc, char *argv[])
         settings.setValue(QStringLiteral("sonProgram"), store.currentName());
     });
 
+    // Makinenin toplam adedi kapanınca sıfırlanmaz: gerçek makinelerde de kalıcıdır.
+    machine.setTotalCount(settings.value(QStringLiteral("toplamAdet"), 0).toInt());
+    QObject::connect(&machine, &IMachine::countersChanged, &settings, [&settings, &machine] {
+        settings.setValue(QStringLiteral("toplamAdet"), machine.totalCount());
+    });
+
     QQmlApplicationEngine engine;
 
     // Main.qml'deki "required property" alanlarını dolduruyoruz.
