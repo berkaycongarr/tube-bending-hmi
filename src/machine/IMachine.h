@@ -2,6 +2,8 @@
 
 #include <QObject>
 #include <QVariant>
+
+#include <cmath>
 #include <QtQml/qqmlregistration.h>
 
 #include "Actuator.h"
@@ -41,6 +43,11 @@ class IMachine : public QObject
     Q_PROPERTY(int partCount READ partCount NOTIFY countersChanged)
     Q_PROPERTY(int totalCount READ totalCount NOTIFY countersChanged)
     Q_PROPERTY(double loadPosition READ loadPosition CONSTANT)
+    Q_PROPERTY(bool hasTooling READ hasTooling NOTIFY toolingChanged)
+    Q_PROPERTY(double toolingRadius READ toolingRadius NOTIFY toolingChanged)
+    Q_PROPERTY(double toolingDiameter READ toolingDiameter NOTIFY toolingChanged)
+    Q_PROPERTY(bool toolingMandrel READ toolingMandrel NOTIFY toolingChanged)
+    Q_PROPERTY(bool toolingFeedDuringBend READ toolingFeedDuringBend NOTIFY toolingChanged)
 
 public:
     enum State {
@@ -82,7 +89,8 @@ public:
         BlockNotHomed,    // referans yok
         BlockPumpOff,     // hidrolik pompa çalışmıyor
         BlockClampClosed, // mengene kapalı: önce açılmalı
-        BlockColletOpen   // boru beklenirken pens hâlâ açık
+        BlockColletOpen,  // boru beklenirken pens hâlâ açık
+        BlockNoTooling    // makineye takılı kalıp bildirilmemiş
     };
     Q_ENUM(StartBlock)
 
@@ -90,8 +98,9 @@ public:
         NoFault,
         FaultTimeout, // adım beklenen sürede bitmedi
         FaultLimit,   // tarif eksen limitlerine sığmıyor
-        FaultRecipe,  // tarif boş ya da hatalı
-        FaultPressure // döngü sırasında hidrolik basınç kesildi
+        FaultRecipe,   // tarif boş ya da hatalı
+        FaultPressure, // döngü sırasında hidrolik basınç kesildi
+        FaultTooling   // program takılı kalıba uymuyor (yarıçap ya da boru çapı farklı)
     };
     Q_ENUM(CycleFault)
 
@@ -155,14 +164,55 @@ public:
     // (on = true), ikinci basış geri alır. Komutu makine hatırlar.
     Q_INVOKABLE virtual void setActuator(Actuator *actuator, bool on) = 0;
 
+    // Takılı kalıp -----------------------------------------------------------
+    // Makineye hangi kalıbın takılı olduğunu ekran bildirir: kalıp yarıçapı (yay
+    // boyu bununla hesaplanır), aldığı boru çapı, malafalı büküm ve bükümde ilerle.
+    // Gerçek makinede bu değerler kalıp değiştirilince PLC'ye kalıp ayarı olarak
+    // yazılır. Döngü sürerken (beklerken de) kalıp değişmez: false döner.
+    Q_INVOKABLE virtual bool setTooling(double dieRadius, double tubeDiameter, bool mandrel,
+                                        bool feedDuringBend)
+    {
+        if (m_cycleState != CycleStopped || !std::isfinite(dieRadius) || !(dieRadius > 0.0)
+            || !std::isfinite(tubeDiameter) || !(tubeDiameter > 0.0))
+            return false;
+        m_hasTooling = true;
+        m_toolingRadius = dieRadius;
+        m_toolingDiameter = tubeDiameter;
+        m_toolingMandrel = mandrel;
+        m_toolingFeedDuringBend = feedDuringBend;
+        emit toolingChanged();
+        return true;
+    }
+
+    // Takılı kalıp bilinmiyor (ör. kalıp listesinde işaretli kalıp yok).
+    Q_INVOKABLE virtual bool clearTooling()
+    {
+        if (m_cycleState != CycleStopped)
+            return false;
+        if (m_hasTooling) {
+            m_hasTooling = false;
+            emit toolingChanged();
+        }
+        return true;
+    }
+
+    bool hasTooling() const { return m_hasTooling; }
+    double toolingRadius() const { return m_hasTooling ? m_toolingRadius : 0.0; }
+    double toolingDiameter() const { return m_hasTooling ? m_toolingDiameter : 0.0; }
+    bool toolingMandrel() const { return m_hasTooling && m_toolingMandrel; }
+    bool toolingFeedDuringBend() const { return m_hasTooling && m_toolingFeedDuringBend; }
+
     // Üretim döngüsü -------------------------------------------------------
     // START: tarifi (program adımlarını) makineye gönderir ve döngüyü başlatır
     // ya da bekleyen döngüye devam eder. Gerçek makinede tarif PLC'ye yazılır.
-    // Her adım { "command": 0/1/2, "value": sayı }; dieRadius takılı kalıbın yarıçapı.
+    // Her adım { "command": 0/1/2, "value": sayı }:
     //   0 İLERLE   : boruyu bu kadar mm ilerlet (göreli)
     //   1 BÜK      : büküm kolunu bu açıya çevir (mutlak, 0'dan başlar)
     //   2 ROTASYON : boruyu bu açıya döndür (mutlak; müşteriye sorulacak varsayım)
-    Q_INVOKABLE virtual void startCycle(const QVariantList &recipe, double dieRadius) = 0;
+    // dieRadius ve tubeDiameter, programın yazıldığı kalıbın değerleridir: makine
+    // bunları takılı kalıpla karşılaştırır, uymuyorsa parça başlamaz.
+    Q_INVOKABLE virtual void startCycle(const QVariantList &recipe, double dieRadius,
+                                        double tubeDiameter) = 0;
     Q_INVOKABLE virtual void resetPartCount() = 0; // üretilen adet sayacını sıfırla
 
     // Döngü durumu
@@ -208,6 +258,7 @@ signals:
     void cycleModeChanged();
     void startBlockChanged();
     void countersChanged();
+    void toolingChanged();
 
 protected:
     // Boru alma konumu makinenin ayarıdır: alt sınıf açılışta bir kez yazar.
@@ -296,6 +347,11 @@ private:
     int m_partCount = 0;
     int m_totalCount = 0;
     double m_loadPosition = 0.0;
+    bool m_hasTooling = false;
+    double m_toolingRadius = 0.0;
+    double m_toolingDiameter = 0.0;
+    bool m_toolingMandrel = false;
+    bool m_toolingFeedDuringBend = false;
     Axis *const m_axisX;
     Axis *const m_axisB;
     Axis *const m_axisA;

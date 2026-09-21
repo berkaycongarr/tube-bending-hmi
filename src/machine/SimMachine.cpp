@@ -12,6 +12,10 @@ constexpr int FeedCommand = 0;   // İLERLE (göreli, mm)
 constexpr int BendCommand = 1;   // BÜK (mutlak açı, derece)
 constexpr int RotateCommand = 2; // ROTASYON (mutlak açı, derece)
 
+// Program ile takılı kalıbın yarıçapı ve boru çapı bu kadar farklıysa "aynı" sayılır
+// (ondalıklı sayılar dosyadan okunurken en küçük basamakta sapabilir).
+constexpr double ToolingTolerance = 0.005; // mm
+
 } // namespace
 
 SimMachine::SimMachine(QObject *parent)
@@ -189,7 +193,7 @@ void SimMachine::setActuator(Actuator *actuator, bool on)
     updateInterlocks();
 }
 
-void SimMachine::startCycle(const QVariantList &recipe, double dieRadius)
+void SimMachine::startCycle(const QVariantList &recipe, double dieRadius, double tubeDiameter)
 {
     // Makinenin kendi denetimi: ekran engellemiş olsa da makine yine bakar.
     updateInterlocks();
@@ -213,9 +217,17 @@ void SimMachine::startCycle(const QVariantList &recipe, double dieRadius)
         // WaitPart: parça bitmişti, yenisi baştan başlar (tarif yeniden okunur).
     }
 
+    // Program, takılı kalıp için mi yazılmış? Başka yarıçapta bükülen parçanın
+    // ölçüleri tutmaz; başka çaptaki boru kalıbın oluğuna oturmaz.
+    if (std::abs(dieRadius - toolingRadius()) > ToolingTolerance
+        || std::abs(tubeDiameter - toolingDiameter()) > ToolingTolerance) {
+        m_recipe.clear();
+        abortCycle(FaultTooling);
+        return;
+    }
+
     // Tarifi makineye yaz. Gerçek makinede bu, adımların PLC'ye aktarılmasıdır.
     m_recipe.clear();
-    bool hasBend = false;
     for (const QVariant &item : recipe) {
         const QVariantMap map = item.toMap();
         RecipeStep step;
@@ -230,17 +242,16 @@ void SimMachine::startCycle(const QVariantList &recipe, double dieRadius)
             abortCycle(FaultRecipe);
             return;
         }
-        hasBend = hasBend || step.command == BendCommand;
         m_recipe.append(step);
     }
 
-    // Büküm varsa kalıp yarıçapı da gerekir: yay boyu ondan hesaplanır.
-    if (m_recipe.isEmpty() || (hasBend && !(dieRadius > 0.0))) {
-        m_recipe.clear();
+    if (m_recipe.isEmpty()) {
         abortCycle(FaultRecipe);
         return;
     }
-    m_dieRadius = dieRadius;
+
+    // Yay boyunu takılı kalıp belirler (programınki de aynı olduğu yukarıda denetlendi).
+    m_dieRadius = toolingRadius();
 
     // Araba, boru alma konumundan açınım boyu kadar daha ilerleyecek: yol yetiyor mu?
     // (Gerçek makinede de tarif, eksen limitlerine sığmalıdır.)
@@ -260,6 +271,20 @@ void SimMachine::startCycle(const QVariantList &recipe, double dieRadius)
 void SimMachine::resetPartCount()
 {
     clearPartCount();
+}
+
+bool SimMachine::setTooling(double dieRadius, double tubeDiameter, bool mandrel, bool feedDuringBend)
+{
+    const bool ok = IMachine::setTooling(dieRadius, tubeDiameter, mandrel, feedDuringBend);
+    updateInterlocks(); // BAŞLAT durumu hemen güncellensin
+    return ok;
+}
+
+bool SimMachine::clearTooling()
+{
+    const bool ok = IMachine::clearTooling();
+    updateInterlocks();
+    return ok;
 }
 
 // ---------------------------------------------------------------------------
@@ -388,6 +413,8 @@ void SimMachine::updateStartBlock()
         block = BlockNotHomed; // referanssız makinede konumlar bilinmez
     else if (pumpState() != PumpRunning)
         block = BlockPumpOff; // mengene, malafa ve pens basınçsız çalışmaz
+    else if (!hasTooling())
+        block = BlockNoTooling; // hangi kalıbın takılı olduğu bilinmeden bükülmez
     else if (cycleState() == CycleWaiting && waitReason() == WaitTube && !actuatorAt(collet(), true))
         block = BlockColletOpen; // boru bekleniyor: önce pens kapatılmalı
     else if (clamp()->command() || clamp()->state() != Actuator::Off)
@@ -554,7 +581,7 @@ void SimMachine::updateCycle(double dt)
         break;
 
     case Phase::MandrelOut:
-        if (!SimParameters::MandrelInCycle || actuatorAt(mandrel(), true))
+        if (!toolingMandrel() || actuatorAt(mandrel(), true))
             beginStep();
         break;
 
@@ -638,7 +665,8 @@ void SimMachine::beginPhase(Phase phase)
         break;
 
     case Phase::MandrelOut:
-        if (SimParameters::MandrelInCycle)
+        // Malafalı büküm takılı kalıbın ayarıdır (müşterinin ekranında MALAFALI BÜK).
+        if (toolingMandrel())
             mandrel()->setCommand(true);
         m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
         break;
@@ -763,12 +791,11 @@ void SimMachine::abortCycle(CycleFault fault)
 
 void SimMachine::followBend()
 {
-    if (!SimParameters::FeedDuringBend)
-        return;
-
-    // Boru kalıba sarıldıkça arkadan boru "yutulur": araba, yayın harcadığı boy
-    // kadar ilerler (yay boyu = kalıp yarıçapı × açı). Bu, makinenin kendi
-    // hareketidir; mengene kilidi elle kumanda içindir, buna takılmaz.
+    // Boru kalıba sarıldıkça arkadan boru "yutulur": pens boruyu tuttuğu için araba,
+    // yayın harcadığı boy kadar ilerlemek zorundadır (yay boyu = kalıp yarıçapı × açı).
+    // BÜKÜMDE İLERLE açıksa araba motorla itilir (destek), kapalıysa boru onu
+    // sürükler; iki durumda da konum aynı yere varır, simülasyonda fark görünmez.
+    // Bu, makinenin kendi hareketidir; mengene kilidi elle kumanda içindir.
     SimAxis &feed = m_axes[0];
     const SimAxis &bend = m_axes[1];
     const double arc = m_dieRadius
@@ -781,13 +808,13 @@ void SimMachine::followBend()
 
 double SimMachine::recipeTravel() const
 {
-    // Arabanın parça boyunca gideceği toplam yol: düz parçalar + (büküm sırasında
-    // ilerliyorsa) yay boyları. Programın açınım boyunun karşılığıdır.
+    // Arabanın parça boyunca gideceği toplam yol: düz parçalar + yay boyları.
+    // Programın açınım boyunun karşılığıdır.
     double travel = 0.0;
     for (const RecipeStep &step : m_recipe) {
         if (step.command == FeedCommand)
             travel += step.value;
-        else if (step.command == BendCommand && SimParameters::FeedDuringBend)
+        else if (step.command == BendCommand)
             travel += m_dieRadius * qDegreesToRadians(step.value);
     }
     return travel;

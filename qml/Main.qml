@@ -81,10 +81,33 @@ Window {
         }
     }
 
+    // Açık program takılı kalıba uyuyor mu? Uymuyorsa nedeni (boş: uyuyor).
+    // Makine de BAŞLAT'ta kendisi karşılaştırır; burası operatöre nedenini gösterir.
+    readonly property string toolingProblem: {
+        if (!root.dies.hasActive)
+            return qsTr("takılı kalıp seçilmemiş")
+        const radiusFits = Math.abs(root.program.dieRadius - root.dies.activeRadius) <= 0.005
+        const diameterFits = Math.abs(root.program.tubeDiameter - root.dies.activeTubeDiameter) <= 0.005
+        if (radiusFits && diameterFits)
+            return ""
+        return qsTr("takılı kalıp programa uymuyor (program R%1 Ø%2, kalıp R%3 Ø%4)")
+                   .arg(root.shortNumber(root.program.dieRadius))
+                   .arg(root.shortNumber(root.program.tubeDiameter))
+                   .arg(root.shortNumber(root.dies.activeRadius))
+                   .arg(root.shortNumber(root.dies.activeTubeDiameter))
+    }
+
+    // 116.00 → "116", 116.50 → "116.5": kısa gösterim (kalıp adlarındaki gibi)
+    function shortNumber(value: real): string {
+        return Number(value.toFixed(2)).toString()
+    }
+
     // Üretim döngüsü başlatılabilir mi? Makinenin kendi denetimine (referans,
-    // pompa, mengene) programın geçerliliği de eklenir. Makine yine de kendisi
-    // bakar: buton yanlışlıkla açık kalsa bile döngü başlamaz.
+    // pompa, mengene, takılı kalıp) programın geçerliliği ve kalıba uyması da
+    // eklenir. Makine yine de kendisi bakar: buton yanlışlıkla açık kalsa bile
+    // döngü başlamaz.
     readonly property bool canStart: machine.startBlock === Machine.StartReady && program.valid
+                                     && toolingProblem.length === 0
 
     // Bekleyen bir döngü varsa START "devam et" demektir.
     readonly property bool resuming: machine.cycleState === Machine.CycleWaiting
@@ -197,7 +220,8 @@ Window {
                 accent: Theme.ok
                 filled: true
                 enabled: root.canStart
-                onClicked: root.machine.startCycle(root.program.recipe(), root.program.dieRadius)
+                onClicked: root.machine.startCycle(root.program.recipe(), root.program.dieRadius,
+                                                   root.program.tubeDiameter)
             }
 
             HmiButton {
@@ -279,11 +303,16 @@ Window {
                     machine: root.machine
                     program: root.program
                     manager: programManager
+                    dies: root.dies
+                    toolingProblem: root.toolingProblem
+                    onDiesRequested: root.currentPage = 2
                 }
 
                 DesignPage {
                     program: root.program
                     manager: programManager
+                    dies: root.dies
+                    toolingProblem: root.toolingProblem
                 }
 
                 DiesPage {

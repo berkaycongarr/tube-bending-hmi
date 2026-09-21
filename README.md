@@ -69,6 +69,14 @@ ile (onay sorularak) işaretlenir ve `ayarlar.ini` içinde hatırlanır; kalıp 
 makineye kopyalansa da "takılı" bilgisi taşınmaz. Takılı kalıp silinemez; döngü sürerken
 takılı kalıp değiştirilemez.
 
+Takılı kalıbın bilgileri makineye bildirilir (gerçek makinede PLC'ye kalıp ayarı olarak
+yazılır): yay boyu kalıbın yarıçapıyla hesaplanır, malafalı kalıpta döngü malafayı ileri
+çıkarır. Program kendi kalıp yarıçapını ve boru çapını saklar; takılı kalıba uymuyorsa
+(ör. program R116 Ø50, kalıp R60 Ø30) BAŞLAT kilitlenir ve nedeni yazılır. Makine de
+BAŞLAT'ta kendisi karşılaştırır. ÜRETİM sayfasındaki TAKILI KALIP kutusu uyumu gösterir;
+dokununca KALIPLAR açılır. TASARIM'daki **TAKILI KALIBA UYDUR** programın yarıçapını ve
+boru çapını takılı kalıbınkiyle değiştirir.
+
 ## Üretim döngüsü
 
 Parçanın adımlarını **makine** yürütür; ekran yalnızca tarifi (program adımlarını) gönderir,
@@ -80,12 +88,14 @@ Bir parçanın sırası:
 
 1. Araba boru alma konumuna (X = 500 mm), büküm kolu başa (B = 0) gider, malafa geri çekilir
 2. Pens açıksa boru beklenir: operatör boruyu takıp pensi kapatır, START'a basar
-3. Malafa ileri çıkar
+3. Kalıp malafalıysa (MALAFALI BÜK) malafa ileri çıkar
 4. Program adımları sırayla işlenir:
    - **İLERLE** (göreli): araba boruyu bu kadar mm ilerletir
    - **BÜK** (mutlak açı): mengene kapanır → kol açıya döner → mengene açılır → kol başa döner.
-     Büküm sırasında araba yayı takip eder (yay boyu = kalıp yarıçapı × açı), böylece arabanın
-     gittiği toplam yol programın açınım boyuna eşit olur
+     Pens boruyu tuttuğu için büküm sırasında araba yayı takip eder (yay boyu = kalıp
+     yarıçapı × açı), böylece arabanın gittiği toplam yol programın açınım boyuna eşit olur.
+     BÜKÜMDE İLERLE açıksa araba motorla itilir (destek), kapalıysa boru onu sürükler;
+     iki durumda da araba aynı yere varır
    - **ROTASYON** (mutlak açı): boru kendi ekseninde döner
 5. Malafa geri çekilir, pens açılır: parça biter, üretilen ve toplam adet artar
 
@@ -99,19 +109,21 @@ operatör boruyu takarken pense ulaşmak için sayfa değiştirmez.
 **YARI OTOMATİK** (BAŞLAT tek adım işler; program denenirken adımlar tek tek görülür).
 Mod, döngü çalışırken değişmez; seçim `ayarlar.ini` içinde saklanır.
 
-Döngü şu durumlarda başlamaz: makine referanssız, pompa durmuş, mengene kapalı ya da boru
-beklenirken pens açık. Döngü sırasında elle kumanda (jog, konuma git, silindirler, referans
-arama) kilitlidir ve butonlar nedenini yazar. Eksenler, döngü operatörü beklerken de kilitli
-kalır: araba oynatılırsa döngü kaldığı yerden yanlış devam eder. Silindirler ise beklerken
-serbesttir, çünkü boruyu takmak için pens gerekir. STOP döngüyü keser.
+Döngü şu durumlarda başlamaz: makine referanssız, pompa durmuş, takılı kalıp yok ya da
+program ona uymuyor, mengene kapalı ya da boru beklenirken pens açık.
+
+Döngü sırasında elle kumanda (jog, konuma git, silindirler, referans arama) kilitlidir ve
+butonlar nedenini yazar. Eksenler, döngü operatörü beklerken de kilitli kalır: araba
+oynatılırsa döngü kaldığı yerden yanlış devam eder. Silindirler ise beklerken serbesttir,
+çünkü boruyu takmak için pens gerekir. STOP döngüyü keser.
 
 Basınç kesilirse ya da bir aşama beklenen sürede bitmezse döngü arızayla durur; silindirler
 olduğu gibi kalır — yarıda kalan bir parçada mengenenin kendiliğinden açılması tehlikelidir,
 kararı operatör verir.
 
-Varsayımlar (demoda müşteriye sorulacak): boru alma konumu, büküm sırasında ilerleme,
-malafalı büküm, adım arası duraklama ve zaman aşımı süreleri, BÜK ile ROTASYON değerlerinin
-mutlak olması. Hepsi `src/machine/SimParameters.h` içindedir.
+Varsayımlar (demoda müşteriye sorulacak): boru alma konumu, adım arası duraklama ve zaman
+aşımı süreleri (`src/machine/SimParameters.h`), BÜK ile ROTASYON değerlerinin mutlak olması,
+BÜKÜMDE İLERLE'nin "araba motorla itilir" anlamına gelmesi.
 
 ## Klasör yapısı
 
@@ -127,8 +139,8 @@ mutlak olması. Hepsi `src/machine/SimParameters.h` içindedir.
 | `src/program/ProgramStore.*` | Program deposu: klasördeki dosyalar, aç / kaydet / sil |
 | `src/tooling/DieLibrary.*` | Kalıp kütüphanesi: kalıplar, takılı kalıp, `kaliplar.json` biçimi |
 | `qml/Main.qml` | Ana çerçeve: üst şerit (durum, eksenler, BAŞLAT/STOP), sol menü, sayfalar |
-| `qml/ProductionPage.qml` | Üretim sayfası: açık program, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |
-| `qml/DesignPage.qml` | Tasarım sayfası: program tablosu, boru ve kalıp, açınım boyu |
+| `qml/ProductionPage.qml` | Üretim sayfası: açık program, takılı kalıp, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |
+| `qml/DesignPage.qml` | Tasarım sayfası: program tablosu, boru ve kalıp, takılı kalıba uyum, açınım boyu |
 | `qml/ProgramTable.qml` | Program tablosu (TASARIM'da düzenlenir, ÜRETİM'de işlenen adımı vurgular) |
 | `qml/DiesPage.qml` | Kalıplar sayfası: kalıp listesi, takılı kalıp, YENİ / DÜZENLE / SİL / TAKILI KALIP YAP |
 | `qml/DieDialog.qml` | Kalıp ekleme ve düzenleme penceresi |

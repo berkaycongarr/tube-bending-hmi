@@ -18,6 +18,13 @@ Rectangle {
     required property Machine machine
     required property BendProgram program
     required property ProgramManager manager
+    required property DieLibrary dies
+
+    // Açık program takılı kalıba uymuyorsa nedeni (Main.qml hesaplar; boş: uyuyor).
+    property string toolingProblem: ""
+
+    // Takılı kalıp kutusuna dokunuldu: KALIPLAR sayfası açılsın (Main.qml açar).
+    signal diesRequested()
 
     // Programın kendi sorunları (makineden bağımsız)
     readonly property string programProblems: {
@@ -44,6 +51,9 @@ Rectangle {
             return qsTr("mengene kapalı")
         case Machine.BlockColletOpen:
             return qsTr("pens açık")
+        case Machine.BlockNoTooling:
+            // Kalıp listesinde takılı kalıp yoksa bu zaten aşağıda yazıyor.
+            return page.toolingProblem.length > 0 ? "" : qsTr("takılı kalıp makineye bildirilmemiş")
         default:
             return ""
         }
@@ -53,6 +63,8 @@ Rectangle {
         const reasons = []
         if (page.machineProblem.length > 0)
             reasons.push(page.machineProblem)
+        if (page.toolingProblem.length > 0)
+            reasons.push(page.toolingProblem)
         if (page.programProblems.length > 0)
             reasons.push(page.programProblems)
         return reasons.join(" · ")
@@ -70,6 +82,8 @@ Rectangle {
             return qsTr("program boş ya da hatalı")
         case Machine.FaultPressure:
             return qsTr("hidrolik basınç kesildi")
+        case Machine.FaultTooling:
+            return qsTr("program takılı kalıba uymuyor")
         default:
             return ""
         }
@@ -100,7 +114,8 @@ Rectangle {
     readonly property string statusKind: {
         if (page.machine.cycleState !== Machine.CycleStopped)
             return "busy"
-        if (page.faultText.length > 0 || page.programProblems.length > 0)
+        if (page.faultText.length > 0 || page.programProblems.length > 0
+            || page.toolingProblem.length > 0)
             return "fault"
         return page.ready ? "ready" : "busy"
     }
@@ -138,6 +153,11 @@ Rectangle {
 
     function formatMm(value: real): string {
         return value.toFixed(2) + " mm"
+    }
+
+    // 116.00 → "116": kalıp adlarındaki gibi kısa gösterim
+    function shortNumber(value: real): string {
+        return Number(value.toFixed(2)).toString()
     }
 
     radius: Theme.radius
@@ -237,19 +257,82 @@ Rectangle {
                 }
 
                 InfoBox {
-                    caption: qsTr("BORU ÇAPI")
-                    value: page.formatMm(page.program.tubeDiameter)
-                }
-
-                InfoBox {
-                    caption: qsTr("KALIP RADIUS")
-                    value: page.formatMm(page.program.dieRadius)
-                }
-
-                InfoBox {
                     objectName: "infoDeveloped"
                     caption: qsTr("AÇINIM BOYU")
                     value: page.formatMm(page.program.developedLength)
+                }
+
+                // Müşterinin ekranındaki "AKTİF KALIP": makinede duran kalıp, yarıçapı ve
+                // aldığı boru çapı, program ona uyuyor mu? Dokununca KALIPLAR açılır
+                // (onların "KALIP SEÇ" butonunun karşılığı).
+                Rectangle {
+                    objectName: "infoDie"
+                    Layout.fillWidth: true
+                    implicitHeight: 76
+                    radius: Theme.radius
+                    color: dieTap.pressed ? Theme.buttonDown : Theme.field
+                    border.width: page.toolingProblem.length > 0 ? 2 : 1
+                    border.color: page.toolingProblem.length > 0 ? Theme.danger : Theme.panelBorder
+
+                    TapHandler {
+                        id: dieTap
+
+                        onTapped: page.diesRequested()
+                    }
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 24
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 1
+
+                        Text {
+                            width: parent.width
+                            text: qsTr("TAKILI KALIP")
+                            font.pixelSize: 11
+                            font.bold: true
+                            color: Theme.textMuted
+                        }
+
+                        Text {
+                            objectName: "infoDieName"
+                            width: parent.width
+                            text: page.dies.hasActive ? page.dies.activeName : qsTr("Seçilmemiş")
+                            font.pixelSize: 15
+                            font.bold: true
+                            color: page.dies.hasActive ? Theme.text : Theme.activeText
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            objectName: "infoDieFit"
+                            width: parent.width
+                            text: !page.dies.hasActive
+                                  ? qsTr("Seçmek için dokunun")
+                                  : (page.toolingProblem.length === 0 ? "✓ " : "✗ ")
+                                    + qsTr("R%1 · Ø%2 %3").arg(page.shortNumber(page.dies.activeRadius))
+                                                         .arg(page.shortNumber(page.dies.activeTubeDiameter))
+                                                         .arg(page.toolingProblem.length === 0 ? qsTr("uyuyor")
+                                                                                              : qsTr("uymuyor"))
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: !page.dies.hasActive ? Theme.activeText
+                                   : page.toolingProblem.length === 0 ? Theme.ok : Theme.danger
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "›"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: Theme.textMuted
+                    }
                 }
 
                 Item {

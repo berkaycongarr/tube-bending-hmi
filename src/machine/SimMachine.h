@@ -31,8 +31,10 @@ public:
     void startPump() override;
     void stopPump() override;
     void setActuator(Actuator *actuator, bool on) override;
-    void startCycle(const QVariantList &recipe, double dieRadius) override;
+    void startCycle(const QVariantList &recipe, double dieRadius, double tubeDiameter) override;
     void resetPartCount() override;
+    bool setTooling(double dieRadius, double tubeDiameter, bool mandrel, bool feedDuringBend) override;
+    bool clearTooling() override;
 
 private:
     // Sanal makinenin her eksen için tuttuğu bilgiler.
@@ -132,7 +134,7 @@ private:
     std::array<SimActuator, 3> m_actuators;    // mengene, malafa, pens
 
     QList<RecipeStep> m_recipe;        // makineye gönderilen program adımları
-    double m_dieRadius = 0.0;          // takılı kalıbın yarıçapı (yay boyu için)
+    double m_dieRadius = 0.0;          // parçanın büküldüğü kalıbın yarıçapı (yay boyu için)
     Phase m_phase = Phase::None;       // döngünün şu anki aşaması
     Phase m_resumePhase = Phase::None; // START'tan sonra devam edilecek aşama
     double m_phaseTime = 0.0;          // aşamada geçen süre (zaman aşımı için)

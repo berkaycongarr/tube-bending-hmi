@@ -12,6 +12,15 @@ Rectangle {
     // Program dosya işlemleri (kaydet, programlar penceresi); Main.qml'de oluşturulur.
     required property ProgramManager manager
 
+    // Kalıp kütüphanesi: program takılı kalıba uyuyor mu diye bakmak için.
+    required property DieLibrary dies
+
+    // Program takılı kalıba uymuyorsa nedeni (Main.qml hesaplar; boş: uyuyor).
+    property string toolingProblem: ""
+
+    // Takılı kalıp var ama program ona uymuyor: tek dokunuşla uydurulabilir.
+    readonly property bool canFitToDie: page.dies.hasActive && page.toolingProblem.length > 0
+
     // Seçili satır (-1: seçim yok). Ekleme seçili satırın altına yapılır.
     property int currentRow: -1
 
@@ -355,6 +364,41 @@ Rectangle {
                 onClicked: page.editTube("dieRadius", qsTr("Kalıp yarıçapı (R)"), 5, 500, page.program.dieRadius)
             }
 
+            // Program makinede duran kalıba uyuyor mu? Program başka bir kalıp için
+            // yazılmışsa üretimde BAŞLAT'a basılamaz.
+            Text {
+                objectName: "designDieStatus"
+                Layout.fillWidth: true
+                text: !page.dies.hasActive ? qsTr("Takılı kalıp seçilmemiş (KALIPLAR)")
+                      : page.toolingProblem.length === 0
+                        ? qsTr("✓ Takılı kalıba uyuyor (%1)").arg(page.dies.activeName)
+                        : qsTr("✗ Takılı kalıp %1 (R%2, Ø%3): program ona uymuyor")
+                              .arg(page.dies.activeName)
+                              .arg(Number(page.dies.activeRadius.toFixed(2)))
+                              .arg(Number(page.dies.activeTubeDiameter.toFixed(2)))
+                font.pixelSize: 13
+                font.bold: true
+                color: !page.dies.hasActive ? Theme.activeText
+                       : page.toolingProblem.length === 0 ? Theme.ok : Theme.danger
+                wrapMode: Text.WordWrap
+            }
+
+            // Programın boru çapını ve kalıp yarıçapını takılı kalıbınkiyle değiştirir.
+            // Açınım boyu yeni yarıçapla yeniden hesaplanır; program "değişti" olur.
+            HmiButton {
+                objectName: "fitToDie"
+                Layout.fillWidth: true
+                visible: page.canFitToDie
+                implicitHeight: 44
+                padding: 6
+                font.pixelSize: 14
+                text: qsTr("TAKILI KALIBA UYDUR")
+                onClicked: {
+                    page.program.tubeDiameter = page.dies.activeTubeDiameter
+                    page.program.dieRadius = page.dies.activeRadius
+                }
+            }
+
             // Açınım boyu: programın ihtiyaç duyduğu boru boyu
             Rectangle {
                 Layout.fillWidth: true
@@ -417,8 +461,10 @@ Rectangle {
                 }
             }
 
+            // Uydurma butonu görünürken bu açıklama gizlenir: sütun dar ekrana da sığsın.
             Text {
                 Layout.fillWidth: true
+                visible: !page.canFitToDie
                 text: qsTr("Açınım boyu = düz parçalar + büküm yayları. "
                            + "Bir yayın boyu: kalıp yarıçapı × büküm açısı (radyan).")
                 font.pixelSize: 13

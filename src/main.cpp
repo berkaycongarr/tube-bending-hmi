@@ -76,6 +76,18 @@ int main(int argc, char *argv[])
     rememberDie();
     QObject::connect(&dies, &DieLibrary::activeChanged, &settings, rememberDie);
 
+    // Takılı kalıbın bilgileri makineye bildirilir (gerçek makinede PLC'ye kalıp
+    // ayarı olarak yazılır). Kalıp değişince ya da takılı kalıp düzeltilince yeniden.
+    auto sendTooling = [&dies, &machine] {
+        if (dies.hasActive())
+            machine.setTooling(dies.activeRadius(), dies.activeTubeDiameter(), dies.activeMandrel(),
+                               dies.activeFeedDuringBend());
+        else
+            machine.clearTooling();
+    };
+    sendTooling();
+    QObject::connect(&dies, &DieLibrary::activeChanged, &machine, sendTooling);
+
     // Çalışma modu da hatırlanır: operatör her açılışta yeniden seçmesin.
     if (settings.value(QStringLiteral("yariOtomatik"), false).toBool())
         machine.setCycleMode(IMachine::SemiAutomaticCycle);

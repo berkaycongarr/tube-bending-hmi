@@ -30,9 +30,8 @@ inline constexpr AxisParameters A = { -360.0,  360.0,     90.0,      0.0,      9
 inline constexpr AxisParameters Y = {    0.0,  150.0,     42.0,      0.0,      30.0,       5.0,     5.0,       5.0,      25.0,       40.0 };
 
 // Üretim döngüsü. Bu değerler de varsayım; demoda müşteriye sorulacak.
+// (Malafalı büküm ve bükümde ilerle kalıbın ayarıdır: KALIPLAR sayfasından gelir.)
 inline constexpr double LoadPositionX = 500.0;      // boru alma konumu (müşterinin ekranında da var)
-inline constexpr bool FeedDuringBend = true;        // büküm sırasında araba yayı takip eder
-inline constexpr bool MandrelInCycle = true;        // malafalı büküm
 inline constexpr double StepPauseSeconds = 0.3;     // adımlar arasında kısa duraklama
 inline constexpr double MoveTimeoutSeconds = 45.0;  // eksen hareketi bu sürede bitmezse arıza
 inline constexpr double ActuatorTimeoutSeconds = 8.0; // silindir bu sürede yerine gitmezse arıza
