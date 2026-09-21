@@ -2,7 +2,8 @@ import QtQuick
 import QtQuick.Layouts
 
 // TASARIM sayfası: büküm programını (reçeteyi) düzenleme.
-// Solda komut listesi, sağda boru ve kalıp bilgileri ile açınım boyu doğrulaması.
+// Solda iki sekme: LİSTE (komut listesi) ve SİMÜLASYON (parçanın çizimi, seçili adım
+// mavi); sağda boru ve kalıp bilgileri ile açınım boyu doğrulaması.
 // Program üretimden ayrı bir sayfada düzenlenir; üretim ekranı onu yalnızca gösterir.
 Rectangle {
     id: page
@@ -179,78 +180,97 @@ Rectangle {
                 }
             }
 
-            RowLayout {
+            // Müşterinin ekranındaki gibi iki sekme. SİMÜLASYON'da da adım eklenebilir:
+            // parça, eklenen her adımla çizimde büyür.
+            ViewTabs {
+                id: designTabs
+
+                Layout.fillWidth: true
+            }
+
+            StackLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 8
+                currentIndex: designTabs.currentIndex
 
-                // Tablo: başlık ve satırlar (ÜRETİM sayfasıyla ortak bileşen)
-                ProgramTable {
-                    id: table
-
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    program: page.program
-                    editable: true
-                    selectedRow: page.currentRow
-                    emptyText: qsTr("Program boş. Aşağıdan adım ekleyin.")
-                    onRowTapped: row => page.selectRow(row)
-                    onValueClicked: (row, command, value) => page.editStep(row, command, value)
-                }
-
-                // Satır düzenleme: taşıma yukarıda, silme ayrı ve aşağıda
-                // (yanlışlıkla silmeyi zorlaştırmak için).
-                ColumnLayout {
-                    Layout.fillWidth: false
-                    Layout.fillHeight: true
-                    Layout.topMargin: 50 // başlık (44) + aralık (6): ilk satırla aynı hizada başlar
+                RowLayout {
                     spacing: 8
 
-                    HmiButton {
-                        objectName: "moveUp"
-                        implicitWidth: 56
-                        implicitHeight: 56
-                        text: "▲"
-                        enabled: page.currentRow > 0
-                        onClicked: {
-                            const row = page.currentRow
-                            if (page.program.moveStep(row, row - 1))
-                                page.selectRow(row - 1)
-                        }
-                    }
+                    // Tablo: başlık ve satırlar (ÜRETİM sayfasıyla ortak bileşen)
+                    ProgramTable {
+                        id: table
 
-                    HmiButton {
-                        objectName: "moveDown"
-                        implicitWidth: 56
-                        implicitHeight: 56
-                        text: "▼"
-                        enabled: page.currentRow >= 0 && page.currentRow < page.program.count - 1
-                        onClicked: {
-                            const row = page.currentRow
-                            if (page.program.moveStep(row, row + 1))
-                                page.selectRow(row + 1)
-                        }
-                    }
-
-                    Item {
+                        Layout.fillWidth: true
                         Layout.fillHeight: true
+                        program: page.program
+                        editable: true
+                        selectedRow: page.currentRow
+                        emptyText: qsTr("Program boş. Aşağıdan adım ekleyin.")
+                        onRowTapped: row => page.selectRow(row)
+                        onValueClicked: (row, command, value) => page.editStep(row, command, value)
                     }
 
-                    HmiButton {
-                        objectName: "removeStep"
-                        implicitWidth: 56
-                        implicitHeight: 56
-                        padding: 4
-                        font.pixelSize: 16
-                        text: qsTr("SİL")
-                        accent: Theme.danger
-                        enabled: page.currentRow >= 0
-                        onClicked: {
-                            const row = page.currentRow
-                            page.program.removeStep(row)
-                            page.selectRow(Math.min(row, page.program.count - 1))
+                    // Satır düzenleme: taşıma yukarıda, silme ayrı ve aşağıda
+                    // (yanlışlıkla silmeyi zorlaştırmak için).
+                    ColumnLayout {
+                        Layout.fillWidth: false
+                        Layout.fillHeight: true
+                        Layout.topMargin: 50 // başlık (44) + aralık (6): ilk satırla aynı hizada başlar
+                        spacing: 8
+
+                        HmiButton {
+                            objectName: "moveUp"
+                            implicitWidth: 56
+                            implicitHeight: 56
+                            text: "▲"
+                            enabled: page.currentRow > 0
+                            onClicked: {
+                                const row = page.currentRow
+                                if (page.program.moveStep(row, row - 1))
+                                    page.selectRow(row - 1)
+                            }
+                        }
+
+                        HmiButton {
+                            objectName: "moveDown"
+                            implicitWidth: 56
+                            implicitHeight: 56
+                            text: "▼"
+                            enabled: page.currentRow >= 0 && page.currentRow < page.program.count - 1
+                            onClicked: {
+                                const row = page.currentRow
+                                if (page.program.moveStep(row, row + 1))
+                                    page.selectRow(row + 1)
+                            }
+                        }
+
+                        Item {
+                            Layout.fillHeight: true
+                        }
+
+                        HmiButton {
+                            objectName: "removeStep"
+                            implicitWidth: 56
+                            implicitHeight: 56
+                            padding: 4
+                            font.pixelSize: 16
+                            text: qsTr("SİL")
+                            accent: Theme.danger
+                            enabled: page.currentRow >= 0
+                            onClicked: {
+                                const row = page.currentRow
+                                page.program.removeStep(row)
+                                page.selectRow(Math.min(row, page.program.count - 1))
+                            }
                         }
                     }
+                }
+
+                // Parçanın çizimi; seçili adım mavi görünür (ekleme onun altına yapılır).
+                PartView {
+                    objectName: "partView"
+                    program: page.program
+                    highlightStep: page.currentRow
                 }
             }
 

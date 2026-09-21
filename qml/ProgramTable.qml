@@ -21,6 +21,8 @@ Item {
     property int selectedRow: -1 // seçili satır (-1: seçim yok)
     property int currentStep: -1 // üretimde işlenen adım (-1: döngü yok)
     property string emptyText: qsTr("Program boş.")
+    // Satır yüksekliği: düzenlenirken dokunmatik için 48; üretimde yalnızca okunur, daha sık.
+    property int rowHeight: 48
 
     // Makine bir adıma geçtiğinde o satır kendiliğinden görünür olur.
     onCurrentStepChanged: table.showRow(table.currentStep)
@@ -117,7 +119,7 @@ Item {
 
                     objectName: "step" + stepRow.index
                     width: list.width
-                    height: 48
+                    height: table.rowHeight
                     radius: Theme.radius
                     color: stepRow.running ? "#1ac77800"
                            : stepRow.selected ? Theme.selection : Theme.field

@@ -340,11 +340,12 @@ Window {
                 border.color: Theme.active
                 border.width: 2
 
+                // "SİMÜLASYON" sekmesiyle karışmasın diye: sanal makine (SimMachine) çalışıyor.
                 Text {
                     id: simText
 
                     anchors.centerIn: parent
-                    text: qsTr("SİMÜLASYON · gerçek makineye bağlı değil")
+                    text: qsTr("SANAL MAKİNE · gerçek makineye bağlı değil")
                     font.pixelSize: Theme.fontSmall
                     font.bold: true
                     color: Theme.text

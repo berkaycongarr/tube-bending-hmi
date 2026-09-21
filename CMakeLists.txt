@@ -47,6 +47,8 @@ qt_add_qml_module(appBoruHmi
         qml/ProgramManager.qml
         qml/DiesPage.qml
         qml/DieDialog.qml
+        qml/ViewTabs.qml
+        qml/PartView.qml
     SOURCES
         src/machine/Actuator.h
         src/machine/Axis.h

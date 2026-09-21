@@ -2,7 +2,8 @@
 
 CNC boru bükme makinesi için Windows operatör ekranı (HMI). C++ ve Qt 6 (QML) ile yazıldı.
 
-Şu an **simülasyon modunda** çalışır: gerçek makine yerine sanal bir makine (`SimMachine`) kullanılır.
+Şu an **sanal makineyle** çalışır: gerçek makine yerine sanal bir makine (`SimMachine`) kullanılır.
+Ekranın sol altındaki "SANAL MAKİNE" yazısı bunu hatırlatır.
 
 ## Gereksinimler
 
@@ -126,10 +127,10 @@ Varsayımlar (demoda müşteriye sorulacak): boru alma konumu, adım arası dura
 aşımı süreleri (`src/machine/SimParameters.h`), BÜK ile ROTASYON değerlerinin mutlak olması,
 BÜKÜMDE İLERLE'nin "araba motorla itilir" anlamına gelmesi.
 
-## Parçanın şekli
+## Parçanın şekli ve SİMÜLASYON
 
 `PartShape`, programdan parçanın şeklini hesaplar: borunun eksen çizgisini (merkez hattını)
-üç boyutta çıkarır. Şekli SİMÜLASYON sekmesi çizecek; hesap çizimden ayrıdır ve ekransız
+üç boyutta çıkarır. Şekli SİMÜLASYON sekmesi çizer; hesap çizimden ayrıdır ve ekransız
 test edilir. Program her değiştiğinde (adım, açı, kalıp yarıçapı) şekil yeniden hesaplanır.
 
 Hesap, borunun ekseni boyunca yönünü bilen bir okla yürür: İLERLE oku düz ilerletir, BÜK oku
@@ -140,6 +141,20 @@ tek düzlemde kalır. Eksen çizgisinin boyu programın açınım boyuna eşitti
 Varsayımlar: açılar programdaki gibi alınır (boru esnemesi hesaba katılmaz); ROTASYON'un
 dönüş yönü müşteriye sorulacak. Yön ters çıkarsa parça ayna görüntüsü gibi çizilir;
 düzeltmek için `PartShape.cpp`'de tek bir işaret değişir.
+
+**SİMÜLASYON**, müşterinin ekranındaki gibi tablonun üstündeki iki sekmeden ikincisidir
+(**LİSTE | SİMÜLASYON**); hem ÜRETİM'de hem TASARIM'da vardır. Parça, borunun gerçek
+çapıyla ve adım numaralarıyla çizilir:
+
+- **ÜST**, **YAN** ve **3B** hazır bakış açılarıdır; parmakla sürükleyerek de döndürülür.
+  Görünüm parçaya her an sığdırılır.
+- ÜRETİM'de döngü sürerken bitmiş adımlar koyu, işlenen adım turuncu, sıradakiler açık
+  renkte görünür.
+- TASARIM'da LİSTE'de seçilen adım mavi görünür. SİMÜLASYON açıkken de adım eklenebilir:
+  parça çizimde hemen değişir.
+
+Çizim ek bir Qt modülü gerektirmez (QML Canvas): parça "ressam algoritmasıyla" uzaktan
+yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/PartView.qml` içinde.
 
 ## Klasör yapısı
 
@@ -156,9 +171,11 @@ düzeltmek için `PartShape.cpp`'de tek bir işaret değişir.
 | `src/program/PartShape.*` | Parçanın şekli: programdan borunun eksen çizgisini (3B) hesaplar |
 | `src/tooling/DieLibrary.*` | Kalıp kütüphanesi: kalıplar, takılı kalıp, `kaliplar.json` biçimi |
 | `qml/Main.qml` | Ana çerçeve: üst şerit (durum, eksenler, BAŞLAT/STOP), sol menü, sayfalar |
-| `qml/ProductionPage.qml` | Üretim sayfası: açık program, takılı kalıp, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |
-| `qml/DesignPage.qml` | Tasarım sayfası: program tablosu, boru ve kalıp, takılı kalıba uyum, açınım boyu |
+| `qml/ProductionPage.qml` | Üretim sayfası: açık program, LİSTE / SİMÜLASYON, takılı kalıp, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |
+| `qml/DesignPage.qml` | Tasarım sayfası: LİSTE (program tablosu) / SİMÜLASYON, boru ve kalıp, takılı kalıba uyum, açınım boyu |
 | `qml/ProgramTable.qml` | Program tablosu (TASARIM'da düzenlenir, ÜRETİM'de işlenen adımı vurgular) |
+| `qml/PartView.qml` | SİMÜLASYON: parçanın üç boyutlu çizimi, bakış açıları, üretimde adım renkleri |
+| `qml/ViewTabs.qml` | LİSTE / SİMÜLASYON sekmeleri |
 | `qml/DiesPage.qml` | Kalıplar sayfası: kalıp listesi, takılı kalıp, YENİ / DÜZENLE / SİL / TAKILI KALIP YAP |
 | `qml/DieDialog.qml` | Kalıp ekleme ve düzenleme penceresi |
 | `qml/ProgramManager.qml` | Program dosya işlemlerinin akışı ve soruları |

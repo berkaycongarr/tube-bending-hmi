@@ -7,7 +7,8 @@ import QtQuick.Layouts
 
 // ÜRETİM sayfası: müşterinin mevcut ekranındaki düzene yakın kuruldu.
 //   üstte açık program ve PROGRAM YÜKLE
-//   ortada program tablosu (işlenen adım turuncu) ve sağında boru/kalıp bilgileri
+//   ortada iki sekme: LİSTE (program tablosu, işlenen adım turuncu) ve SİMÜLASYON
+//   (parçanın çizimi, bitmiş adımlar koyu, işlenen turuncu); sağında boru/kalıp bilgileri
 //   altında ilerleme ve durum şeridi
 //   en altta hidrolik kumandalar, referans arama, mod seçimi ve sayaçlar
 // Döngüyü başlatan BAŞLAT butonu üst şerittedir (STOP'un yanında), çünkü makinenin
@@ -137,6 +138,16 @@ Rectangle {
         return (page.machine.currentStep + 1) / page.machine.stepCount
     }
 
+    // SİMÜLASYON'un renkleri için: bu adımdan öncekiler bitti. Boru beklenirken hiçbiri
+    // (-1), parça bitince hepsi (adım sayısı). Yarı otomatikte bekleyen adım sıradakidir.
+    readonly property int simulationStep: {
+        if (page.machine.cycleState === Machine.CycleStopped)
+            return -1
+        if (page.machine.currentStep >= 0)
+            return page.machine.currentStep
+        return page.machine.waitReason === Machine.WaitPart ? page.program.count : -1
+    }
+
     readonly property string stepText: {
         if (page.machine.cycleState === Machine.CycleStopped || page.machine.stepCount <= 0)
             return ""
@@ -221,20 +232,46 @@ Rectangle {
             }
         }
 
-        // ---------------- Orta: tablo ve boru/kalıp bilgileri ----------------
+        // ---------------- Orta: tablo / simülasyon ve boru/kalıp bilgileri ----------------
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 10
 
-            // TASARIM'daki tablonun aynısı; burada yalnızca gösterir ve makinenin
-            // işlediği adımı vurgular.
-            ProgramTable {
+            // Müşterinin ekranındaki gibi iki sekme: LİSTE ve SİMÜLASYON.
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                program: page.program
-                currentStep: page.machine.currentStep
-                emptyText: qsTr("Program boş. TASARIM sayfasında adım ekleyin ya da program yükleyin.")
+                spacing: 6
+
+                ViewTabs {
+                    id: productionTabs
+
+                    Layout.fillWidth: true
+                }
+
+                StackLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    currentIndex: productionTabs.currentIndex
+
+                    // TASARIM'daki tablonun aynısı; burada yalnızca gösterir ve makinenin
+                    // işlediği adımı vurgular. Satırlar daha sık: beş adım bir bakışta görünsün.
+                    ProgramTable {
+                        program: page.program
+                        currentStep: page.machine.currentStep
+                        rowHeight: 38
+                        emptyText: qsTr("Program boş. TASARIM sayfasında adım ekleyin ya da program yükleyin.")
+                    }
+
+                    // Parçanın çizimi: üretim sürerken adımlar ilerledikçe renklenir.
+                    PartView {
+                        objectName: "partView"
+                        program: page.program
+                        production: page.machine.cycleState !== Machine.CycleStopped
+                        progressStep: page.simulationStep
+                    }
+                }
             }
 
             // Müşterinin ekranında da bu değerler tablonun sağında duruyor.
