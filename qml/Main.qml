@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Layouts
 
-// Ana ekran: üstte durum, eksen konumları ve STOP; solda menü; ortada seçili
-// sayfa; altta çalışma modu ve saat. Üst şerit her sayfada görünür kalır.
+// Ana ekran: üstte durum, eksen konumları, BAŞLAT ve STOP; solda menü; ortada
+// seçili sayfa; altta çalışma modu ve saat. Üst şerit her sayfada görünür kalır.
 Window {
     id: root
 
@@ -77,21 +77,31 @@ Window {
         }
     }
 
+    // Üretim döngüsü başlatılabilir mi? Makinenin kendi denetimine (referans,
+    // pompa, mengene) programın geçerliliği de eklenir. Makine yine de kendisi
+    // bakar: buton yanlışlıkla açık kalsa bile döngü başlamaz.
+    readonly property bool canStart: machine.startBlock === Machine.StartReady && program.valid
+
+    // Bekleyen bir döngü varsa START "devam et" demektir.
+    readonly property bool resuming: machine.cycleState === Machine.CycleWaiting
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 16
         spacing: 16
 
-        // Üst şerit: durum, eksen konumları, STOP.
-        // Dar ekranda (1024 px) eksen kutuları 190'dan 145 px'e kadar daralır;
-        // durum kutusu en az 220 px kalır ki makinenin durumu her zaman okunsun.
+        // Üst şerit: durum, eksen konumları, BAŞLAT ve STOP. Müşterinin ekranında
+        // da bu ikili sağ üst köşede duruyor; her sayfadan erişilir.
+        // Dar ekranda (1024 px) kutular daralır: eksenler 172'den 127 px'e (konum
+        // yazısı da sığana kadar küçülür), butonlar 124'ten 106 px'e; durum
+        // kutusu en az 210 px kalır ki "REFERANS ARANIYOR" kesilmesin.
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.minimumWidth: 220
+                Layout.minimumWidth: 210
                 Layout.preferredHeight: 72
                 radius: Theme.radius
                 color: Theme.panel
@@ -140,39 +150,57 @@ Window {
 
             AxisDisplay {
                 Layout.fillWidth: true
-                Layout.minimumWidth: 145
-                Layout.maximumWidth: 190
+                Layout.minimumWidth: 127
+                Layout.maximumWidth: 172
                 axis: root.machine.axisX
                 title: qsTr("İlerletme")
             }
 
             AxisDisplay {
                 Layout.fillWidth: true
-                Layout.minimumWidth: 145
-                Layout.maximumWidth: 190
+                Layout.minimumWidth: 127
+                Layout.maximumWidth: 172
                 axis: root.machine.axisB
                 title: qsTr("Büküm")
             }
 
             AxisDisplay {
                 Layout.fillWidth: true
-                Layout.minimumWidth: 145
-                Layout.maximumWidth: 190
+                Layout.minimumWidth: 127
+                Layout.maximumWidth: 172
                 axis: root.machine.axisA
                 title: qsTr("Rotasyon")
             }
 
             AxisDisplay {
                 Layout.fillWidth: true
-                Layout.minimumWidth: 145
-                Layout.maximumWidth: 190
+                Layout.minimumWidth: 127
+                Layout.maximumWidth: 172
                 axis: root.machine.axisY
                 title: qsTr("Öteleme")
             }
 
+            // Üretim döngüsünü başlatır ya da bekleyen döngüye devam ettirir.
+            // Tarifi ekran gönderir, adımları makine yürütür.
+            HmiButton {
+                objectName: "startButton"
+                Layout.fillWidth: true
+                Layout.minimumWidth: 106
+                Layout.maximumWidth: 124
+                Layout.preferredHeight: 72
+                font.pixelSize: 15
+                text: root.resuming ? qsTr("▶ DEVAM") : qsTr("▶ BAŞLAT")
+                accent: Theme.ok
+                filled: true
+                enabled: root.canStart
+                onClicked: root.machine.startCycle(root.program.recipe(), root.program.dieRadius)
+            }
+
             HmiButton {
                 objectName: "stopButton"
-                Layout.preferredWidth: 140
+                Layout.fillWidth: true
+                Layout.minimumWidth: 106
+                Layout.maximumWidth: 124
                 Layout.preferredHeight: 72
                 text: qsTr("STOP")
                 accent: Theme.danger

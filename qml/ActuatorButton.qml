@@ -37,11 +37,11 @@ T.Button {
     readonly property string lockText: {
         switch (control.actuator.interlock) {
         case Actuator.PumpOff:
-            return qsTr("Pompa çalışmıyor")
+            return qsTr("Basınç yok")
         case Actuator.AxesMoving:
             return qsTr("Eksenler hareketli")
         case Actuator.CycleRunning:
-            return qsTr("Döngü çalışıyor")
+            return qsTr("Üretimde")
         default:
             return ""
         }
@@ -72,6 +72,7 @@ T.Button {
             font.bold: true
             fontSizeMode: Text.HorizontalFit
             minimumPixelSize: 14
+            elide: Text.ElideRight // dar butonda (ÜRETİM alt şeridi) taşmasın
             color: control.isOn ? "white" : control.inMotion ? Theme.activeText : Theme.text
         }
 

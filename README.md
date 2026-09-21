@@ -72,13 +72,21 @@ Bir parçanın sırası:
    - **ROTASYON** (mutlak açı): boru kendi ekseninde döner
 5. Malafa geri çekilir, pens açılır: parça biter, üretilen ve toplam adet artar
 
-Çalışma modu iki türlüdür ve seçilebilir: **otomatik** (START parçanın tamamını işler) ve
-**yarı otomatik** (START tek adım işler; program denenirken adımlar tek tek görülür).
-Mod, döngü çalışırken değişmez.
+Ekranda döngü şöyle kullanılır: **BAŞLAT** ve **STOP** üst şeritte, her sayfadan erişilir
+(müşterinin ekranında da bu ikili sağ üstte). ÜRETİM sayfasında işlenen adım tabloda turuncu
+görünür, altındaki çubuk ilerlemeyi ve durum yazısı makinenin ne beklediğini söyler
+("Boruyu takın, pensi kapatın ve BAŞLAT'a basın" gibi). Hidrolik kumandalar da bu sayfadadır:
+operatör boruyu takarken pense ulaşmak için sayfa değiştirmez.
+
+Çalışma modu iki türlüdür ve ekrandan seçilir: **OTOMATİK** (BAŞLAT parçanın tamamını işler) ve
+**YARI OTOMATİK** (BAŞLAT tek adım işler; program denenirken adımlar tek tek görülür).
+Mod, döngü çalışırken değişmez; seçim `ayarlar.ini` içinde saklanır.
 
 Döngü şu durumlarda başlamaz: makine referanssız, pompa durmuş, mengene kapalı ya da boru
 beklenirken pens açık. Döngü sırasında elle kumanda (jog, konuma git, silindirler, referans
-arama) kilitlidir; STOP döngüyü keser. Basınç kesilirse ya da bir aşama beklenen sürede
+arama) kilitlidir ve butonlar nedenini yazar. Eksenler, döngü operatörü beklerken de kilitli
+kalır: araba oynatılırsa döngü kaldığı yerden yanlış devam eder. Silindirler ise beklerken
+serbesttir, çünkü boruyu takmak için pens gerekir. STOP döngüyü keser. Basınç kesilirse ya da bir aşama beklenen sürede
 bitmezse döngü arızayla durur; silindirler olduğu gibi kalır — yarıda kalan bir parçada
 mengenenin kendiliğinden açılması tehlikelidir, kararı operatör verir.
 
@@ -98,10 +106,10 @@ mutlak olması. Hepsi `src/machine/SimParameters.h` içindedir.
 | `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, süreler |
 | `src/program/BendProgram.*` | Büküm programı (reçete): komut listesi, açınım boyu, doğrulama, JSON biçimi |
 | `src/program/ProgramStore.*` | Program deposu: klasördeki dosyalar, aç / kaydet / sil |
-| `qml/Main.qml` | Ana çerçeve: üst şerit, sol menü, sayfalar |
-| `qml/ProductionPage.qml` | Üretim sayfası: açık program, üretime hazır mı, program yükleme, referans arama |
+| `qml/Main.qml` | Ana çerçeve: üst şerit (durum, eksenler, BAŞLAT/STOP), sol menü, sayfalar |
+| `qml/ProductionPage.qml` | Üretim sayfası: açık program, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |
 | `qml/DesignPage.qml` | Tasarım sayfası: program tablosu, boru ve kalıp, açınım boyu |
-| `qml/ProgramTable.qml` | Program tablosu (TASARIM'da düzenlenir, ÜRETİM'de yalnızca gösterir) |
+| `qml/ProgramTable.qml` | Program tablosu (TASARIM'da düzenlenir, ÜRETİM'de işlenen adımı vurgular) |
 | `qml/ProgramManager.qml` | Program dosya işlemlerinin akışı ve soruları |
 | `qml/ProgramsDialog.qml` | Programlar penceresi: liste, AÇ / YENİ / FARKLI KAYDET / SİL |
 | `qml/NameDialog.qml` | Program adı girme penceresi |

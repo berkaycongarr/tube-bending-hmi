@@ -38,7 +38,7 @@ public:
     enum Interlock {
         NoInterlock, // kilit yok, hareket edebilir
         ClampClosed, // mengene boruyu tutuyor (X, A ve Y için)
-        CycleRunning // üretim döngüsü çalışıyor: eksenleri makine sürüyor
+        CycleActive  // üretim döngüsü sürüyor (beklerken de): eksenleri makine sürer
     };
     Q_ENUM(Interlock)
 

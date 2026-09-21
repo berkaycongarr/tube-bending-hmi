@@ -19,7 +19,11 @@ Item {
     required property BendProgram program
     property bool editable: false
     property int selectedRow: -1 // seçili satır (-1: seçim yok)
+    property int currentStep: -1 // üretimde işlenen adım (-1: döngü yok)
     property string emptyText: qsTr("Program boş.")
+
+    // Makine bir adıma geçtiğinde o satır kendiliğinden görünür olur.
+    onCurrentStepChanged: table.showRow(table.currentStep)
 
     signal rowTapped(int row)
     signal valueClicked(int row, int command, real value)
@@ -108,14 +112,18 @@ Item {
                     required property bool valid
 
                     readonly property bool selected: table.selectedRow === stepRow.index
+                    // Üretimde makinenin şu an işlediği adım: turuncu, "devam ediyor".
+                    readonly property bool running: table.currentStep === stepRow.index
 
                     objectName: "step" + stepRow.index
                     width: list.width
                     height: 48
                     radius: Theme.radius
-                    color: stepRow.selected ? Theme.selection : Theme.field
-                    border.width: stepRow.selected ? 2 : 1
-                    border.color: stepRow.selected ? Theme.navSelected : Theme.panelBorder
+                    color: stepRow.running ? "#1ac77800"
+                           : stepRow.selected ? Theme.selection : Theme.field
+                    border.width: stepRow.running || stepRow.selected ? 2 : 1
+                    border.color: stepRow.running ? Theme.active
+                                  : stepRow.selected ? Theme.navSelected : Theme.panelBorder
 
                     TapHandler {
                         onTapped: table.rowTapped(stepRow.index)
@@ -139,7 +147,7 @@ Item {
                             text: table.commandName(stepRow.command)
                             font.pixelSize: Theme.fontNormal
                             font.bold: true
-                            color: Theme.text
+                            color: stepRow.running ? Theme.activeText : Theme.text
                         }
 
                         // Üç değer sütunu: İLERLE, BÜK, ROTASYON sırasıyla

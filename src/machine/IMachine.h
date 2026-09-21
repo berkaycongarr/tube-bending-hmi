@@ -40,6 +40,7 @@ class IMachine : public QObject
     Q_PROPERTY(CycleMode cycleMode READ cycleMode WRITE setCycleMode NOTIFY cycleModeChanged)
     Q_PROPERTY(int partCount READ partCount NOTIFY countersChanged)
     Q_PROPERTY(int totalCount READ totalCount NOTIFY countersChanged)
+    Q_PROPERTY(double loadPosition READ loadPosition CONSTANT)
 
 public:
     enum State {
@@ -174,6 +175,10 @@ public:
     int partCount() const { return m_partCount; }   // bu programda üretilen adet
     int totalCount() const { return m_totalCount; } // makinenin toplam adedi
 
+    // Boru alma konumu: her parça buradan başlar, boru burada takılır (mm).
+    // Müşterinin ekranında "BORU ALMA KONUM X" olarak görünüyor.
+    double loadPosition() const { return m_loadPosition; }
+
     CycleMode cycleMode() const { return m_cycleMode; }
 
     // Mod yalnızca döngü çalışmıyorken değişir: yarısında değiştirmek operatör
@@ -205,6 +210,9 @@ signals:
     void countersChanged();
 
 protected:
+    // Boru alma konumu makinenin ayarıdır: alt sınıf açılışta bir kez yazar.
+    void setLoadPosition(double position) { m_loadPosition = position; }
+
     // Bu değerleri yalnızca alt sınıflar değiştirebilir.
     void setState(State state)
     {
@@ -287,6 +295,7 @@ private:
     int m_stepCount = 0;
     int m_partCount = 0;
     int m_totalCount = 0;
+    double m_loadPosition = 0.0;
     Axis *const m_axisX;
     Axis *const m_axisB;
     Axis *const m_axisA;

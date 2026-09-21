@@ -1,10 +1,17 @@
+// Sayfa içindeki küçük bileşenler (InfoBox, ModeButton, Counter) "page" kimliğine
+// güvenle erişebilsin.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Layouts
 
-// ÜRETİM sayfası: solda açık program (salt okunur tablo, boru ve kalıp bilgileri,
-// üretime hazır mı?), sağda referans arama. Program buradan da yüklenebilir
-// (PROGRAM YÜKLE); düzenleme TASARIM sayfasında yapılır. Üretim döngüsü (START)
-// sonraki adımda bu sayfaya eklenecek.
+// ÜRETİM sayfası: müşterinin mevcut ekranındaki düzene yakın kuruldu.
+//   üstte açık program ve PROGRAM YÜKLE
+//   ortada program tablosu (işlenen adım turuncu) ve sağında boru/kalıp bilgileri
+//   altında ilerleme ve durum şeridi
+//   en altta hidrolik kumandalar, referans arama, mod seçimi ve sayaçlar
+// Döngüyü başlatan BAŞLAT butonu üst şerittedir (STOP'un yanında), çünkü makinenin
+// START/STOP ikilisi her sayfadan erişilebilir olmalıdır.
 Rectangle {
     id: page
 
@@ -12,39 +19,40 @@ Rectangle {
     required property BendProgram program
     required property ProgramManager manager
 
-    // Mengene boruyu tutuyorsa ya da üretim döngüsü çalışıyorsa X, A ve Y
-    // kilitlidir; bu eksenler hareket ettiği için referans arama da kilitlenir.
-    readonly property bool axesLocked: page.machine.axisX.interlock !== Axis.NoInterlock
-                                       || page.machine.axisA.interlock !== Axis.NoInterlock
-                                       || page.machine.axisY.interlock !== Axis.NoInterlock
-
-    readonly property string homeLockReason: {
-        if (!page.axesLocked)
-            return ""
-        if (page.machine.axisX.interlock === Axis.CycleRunning)
-            return qsTr("Kilitli: üretim döngüsü çalışıyor")
-        return qsTr("Kilitli: referans aramak için önce mengeneyi açın")
-    }
-
     // Programın kendi sorunları (makineden bağımsız)
     readonly property string programProblems: {
         const problems = []
         if (page.program.count === 0)
-            problems.push(qsTr("Program boş"))
+            problems.push(qsTr("program boş"))
         else if (page.program.remainingLength < -0.001)
-            problems.push(qsTr("Boru %1 mm kısa").arg((-page.program.remainingLength).toFixed(2)))
+            problems.push(qsTr("boru %1 mm kısa").arg((-page.program.remainingLength).toFixed(2)))
         if (page.program.invalidStepCount > 0)
             problems.push(qsTr("%1 adımda sınır dışı değer").arg(page.program.invalidStepCount))
         return problems.join(" · ")
     }
 
-    // Üretime engel olan her şey: makine hazır değilse ve programın sorunları.
+    // Makinenin kendi engeli: döngüyü neden başlatamıyor?
+    readonly property string machineProblem: {
+        switch (page.machine.startBlock) {
+        case Machine.BlockNotHomed:
+            return page.machine.state === Machine.Homing ? qsTr("referans aranıyor")
+                                                         : qsTr("makine referanssız")
+        case Machine.BlockPumpOff:
+            // Pompa kumandası HAREKET sayfasında: operatör nereye gideceğini bilsin.
+            return qsTr("hidrolik pompa çalışmıyor → HAREKET sayfası")
+        case Machine.BlockClampClosed:
+            return qsTr("mengene kapalı")
+        case Machine.BlockColletOpen:
+            return qsTr("pens açık")
+        default:
+            return ""
+        }
+    }
+
     readonly property string blockReason: {
         const reasons = []
-        if (page.machine.state === Machine.Homing)
-            reasons.push(qsTr("Referans aranıyor"))
-        else if (page.machine.state !== Machine.Ready)
-            reasons.push(qsTr("Makine referanssız"))
+        if (page.machineProblem.length > 0)
+            reasons.push(page.machineProblem)
         if (page.programProblems.length > 0)
             reasons.push(page.programProblems)
         return reasons.join(" · ")
@@ -52,10 +60,81 @@ Rectangle {
 
     readonly property bool ready: page.blockReason.length === 0
 
-    // Renk anlam taşır: yeşil hazır, kırmızı program hatalı, turuncu makine bekliyor.
-    readonly property color readinessColor: page.ready ? Theme.ok
-                                            : page.programProblems.length > 0 ? Theme.danger
-                                                                              : Theme.active
+    readonly property string faultText: {
+        switch (page.machine.cycleFault) {
+        case Machine.FaultTimeout:
+            return qsTr("adım beklenen sürede bitmedi")
+        case Machine.FaultLimit:
+            return qsTr("program eksen limitlerine sığmıyor")
+        case Machine.FaultRecipe:
+            return qsTr("program boş ya da hatalı")
+        case Machine.FaultPressure:
+            return qsTr("hidrolik basınç kesildi")
+        default:
+            return ""
+        }
+    }
+
+    // Şeritte yazan ana bilgi: makine ne yapıyor, operatörden ne bekliyor?
+    readonly property string cycleText: {
+        if (page.machine.cycleState === Machine.CycleRunning)
+            return qsTr("Üretim sürüyor")
+        if (page.machine.cycleState === Machine.CycleWaiting) {
+            switch (page.machine.waitReason) {
+            case Machine.WaitTube:
+                return qsTr("Boruyu takın, pensi kapatın ve BAŞLAT'a basın")
+            case Machine.WaitStep:
+                return qsTr("Adım bitti · sıradaki adım için BAŞLAT (yarı otomatik)")
+            default:
+                return qsTr("Parça bitti · parçayı alın, yeni boru takıp BAŞLAT'a basın")
+            }
+        }
+        if (page.faultText.length > 0)
+            return qsTr("ARIZA: %1").arg(page.faultText)
+        return page.ready ? qsTr("✓ Üretime hazır · BAŞLAT'a basın")
+                          : qsTr("Üretime hazır değil: %1").arg(page.blockReason)
+    }
+
+    // Durumun anlamı tek yerde belirlenir; renkler buradan türer.
+    //   ready: üretime hazır · busy: çalışıyor ya da operatör bekleniyor · fault: sorun var
+    readonly property string statusKind: {
+        if (page.machine.cycleState !== Machine.CycleStopped)
+            return "busy"
+        if (page.faultText.length > 0 || page.programProblems.length > 0)
+            return "fault"
+        return page.ready ? "ready" : "busy"
+    }
+
+    // Renk anlam taşır: yeşil hazır, turuncu devam ediyor, kırmızı sorun.
+    readonly property color cycleColor: page.statusKind === "fault" ? Theme.danger
+                                        : page.statusKind === "ready" ? Theme.ok : Theme.active
+
+    // Turuncu zeminin yazı tonu daha koyu: küçük puntoda okunaklı olsun.
+    readonly property color cycleTextColor: page.statusKind === "fault" ? Theme.danger
+                                            : page.statusKind === "ready" ? Theme.ok : Theme.activeText
+
+    // İlerleme: kaçıncı adımdayız? Parça bitince dolu görünür.
+    readonly property real progress: {
+        if (page.machine.stepCount <= 0 || page.machine.cycleState === Machine.CycleStopped)
+            return 0
+        if (page.machine.currentStep < 0)
+            return page.machine.waitReason === Machine.WaitPart ? 1 : 0
+        return (page.machine.currentStep + 1) / page.machine.stepCount
+    }
+
+    readonly property string stepText: {
+        if (page.machine.cycleState === Machine.CycleStopped || page.machine.stepCount <= 0)
+            return ""
+        if (page.machine.currentStep < 0)
+            return page.machine.waitReason === Machine.WaitPart ? qsTr("Parça tamam")
+                                                                : qsTr("Hazırlanıyor")
+        return qsTr("Adım %1/%2").arg(page.machine.currentStep + 1).arg(page.machine.stepCount)
+    }
+
+    // Referans arama X, A ve Y eksenlerini hareket ettirir: kilitliyken aranamaz.
+    readonly property bool axesLocked: page.machine.axisX.interlock !== Axis.NoInterlock
+                                       || page.machine.axisA.interlock !== Axis.NoInterlock
+                                       || page.machine.axisY.interlock !== Axis.NoInterlock
 
     function formatMm(value: real): string {
         return value.toFixed(2) + " mm"
@@ -65,302 +144,354 @@ Rectangle {
     color: Theme.panel
     border.color: Theme.panelBorder
 
-    RowLayout {
+    ColumnLayout {
         anchors.fill: parent
         anchors.margins: 16
-        spacing: 16
+        spacing: 10
 
-        // ---------------- Sol: açık program ----------------
-        ColumnLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: 10
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 12
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-
-                    RowLayout {
-                        spacing: 10
-
-                        Text {
-                            text: qsTr("Açık program")
-                            font.pixelSize: 13
-                            font.bold: true
-                            color: Theme.textMuted
-                        }
-
-                        Text {
-                            objectName: "productionUnsaved"
-                            visible: page.program.modified
-                            text: qsTr("● Kaydedilmedi")
-                            font.pixelSize: 13
-                            font.bold: true
-                            color: Theme.activeText
-                        }
-                    }
-
-                    Text {
-                        objectName: "productionProgramName"
-                        Layout.fillWidth: true
-                        text: page.program.name
-                        font.pixelSize: Theme.fontTitle
-                        font.bold: true
-                        color: Theme.text
-                        elide: Text.ElideRight
-                    }
-                }
-
-                // Müşterinin ekranındaki "DOSYA YÜKLE" gibi: kayıtlı bir programı seçip yükler.
-                HmiButton {
-                    objectName: "loadProgram"
-                    implicitWidth: 180
-                    implicitHeight: 52
-                    font.pixelSize: 15
-                    text: qsTr("PROGRAM YÜKLE")
-                    onClicked: page.manager.loadProgram()
-                }
-            }
-
-            // TASARIM'daki tablonun aynısı, yalnızca gösterir.
-            ProgramTable {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                program: page.program
-                emptyText: qsTr("Program boş. TASARIM sayfasında adım ekleyin ya da program yükleyin.")
-            }
-
-            // Boru ve kalıp bilgileri, açınım boyu
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                InfoChip {
-                    objectName: "infoTubeLength"
-                    caption: qsTr("Boru boyu")
-                    value: page.formatMm(page.program.tubeLength)
-                }
-
-                InfoChip {
-                    caption: qsTr("Boru çapı")
-                    value: page.formatMm(page.program.tubeDiameter)
-                }
-
-                InfoChip {
-                    caption: qsTr("Kalıp yarıçapı")
-                    value: page.formatMm(page.program.dieRadius)
-                }
-
-                InfoChip {
-                    objectName: "infoDeveloped"
-                    caption: qsTr("Açınım boyu")
-                    value: page.formatMm(page.program.developedLength)
-                }
-            }
-
-            // Üretime hazır mı? Değilse nedenleri.
-            Rectangle {
-                objectName: "readiness"
-                Layout.fillWidth: true
-                implicitHeight: 56
-                radius: Theme.radius
-                color: Theme.field
-                border.color: Theme.panelBorder
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: 8
-                    radius: Theme.radius
-                    color: page.readinessColor
-                }
-
-                Text {
-                    objectName: "readinessText"
-                    anchors.left: parent.left
-                    anchors.leftMargin: 20
-                    anchors.right: parent.right
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: page.ready ? qsTr("✓ Üretime hazır")
-                                     : qsTr("Üretime hazır değil: %1").arg(page.blockReason)
-                    font.pixelSize: 15
-                    font.bold: true
-                    color: page.ready ? Theme.ok
-                           : page.programProblems.length > 0 ? Theme.danger : Theme.activeText
-                    wrapMode: Text.WordWrap
-                    maximumLineCount: 2
-                    elide: Text.ElideRight
-                }
-            }
-        }
-
-        // ---------------- Sağ: referans arama ----------------
-        ColumnLayout {
-            Layout.fillWidth: false
-            Layout.preferredWidth: 260
-            Layout.fillHeight: true
-            spacing: 8
-
-            Text {
-                text: qsTr("Referans Arama")
-                font.pixelSize: Theme.fontTitle
-                font.bold: true
-                color: Theme.text
-            }
-
-            Text {
-                Layout.fillWidth: true
-                text: qsTr("Eksenler sırayla referans noktasına gider; orada eksene bilinen "
-                           + "bir değer yazılır ve gerçek konumu belirlenmiş olur.")
-                font.pixelSize: 13
-                color: Theme.textMuted
-                wrapMode: Text.WordWrap
-            }
-
-            HomingStep {
-                Layout.fillWidth: true
-                order: 1
-                axis: page.machine.axisB
-                title: qsTr("Büküm")
-            }
-
-            HomingStep {
-                Layout.fillWidth: true
-                order: 2
-                axis: page.machine.axisY
-                title: qsTr("Öteleme")
-            }
-
-            HomingStep {
-                Layout.fillWidth: true
-                order: 3
-                axis: page.machine.axisA
-                title: qsTr("Rotasyon")
-            }
-
-            HomingStep {
-                Layout.fillWidth: true
-                order: 4
-                axis: page.machine.axisX
-                title: qsTr("İlerletme")
-            }
-
-            HmiButton {
-                objectName: "homeButton"
-                Layout.fillWidth: true
-                Layout.topMargin: 4
-                implicitHeight: 60
-                font.pixelSize: 16
-                text: page.machine.state === Machine.Ready ? qsTr("TEKRAR REFERANS ARA")
-                                                           : qsTr("REFERANS ARA (HOME)")
-                enabled: page.machine.state !== Machine.Homing && !page.axesLocked
-                onClicked: page.machine.startHoming()
-            }
-
-            // Referans aramada X, A ve Y hareket eder; kilitliyken aranamaz.
-            Text {
-                objectName: "homeLockHint"
-                Layout.fillWidth: true
-                visible: page.axesLocked && page.machine.state !== Machine.Homing
-                text: page.homeLockReason
-                font.pixelSize: Theme.fontSmall
-                font.bold: true
-                color: Theme.activeText
-                wrapMode: Text.WordWrap
-            }
-
-            Item {
-                Layout.fillHeight: true
-            }
-        }
-    }
-
-    // Referans arama adımlarından biri: sıra, eksen ve adı, referans değeri, durum.
-    component HomingStep: Rectangle {
-        id: step
-
-        required property int order
-        required property Axis axis
-        required property string title
-
-        objectName: "homingStep" + step.axis.name
-        implicitHeight: 50
-        radius: Theme.radius
-        color: step.axis.homing ? "#1ac77800" : "transparent"
-        border.color: step.axis.homing ? Theme.active : Theme.panelBorder
-
+        // ---------------- Üst: açık program ----------------
         RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
-            spacing: 10
-
-            Rectangle {
-                implicitWidth: 26
-                implicitHeight: 26
-                radius: 13
-                color: step.axis.homed ? Theme.ok : step.axis.homing ? Theme.active : Theme.idle
-
-                Text {
-                    anchors.centerIn: parent
-                    text: step.axis.homed ? "✓" : step.order.toString()
-                    font.pixelSize: 13
-                    font.bold: true
-                    color: "white"
-                }
-            }
+            Layout.fillWidth: true
+            spacing: 12
 
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
 
+                RowLayout {
+                    spacing: 10
+
+                    Text {
+                        text: qsTr("Açık program")
+                        font.pixelSize: 13
+                        font.bold: true
+                        color: Theme.textMuted
+                    }
+
+                    Text {
+                        objectName: "productionUnsaved"
+                        visible: page.program.modified
+                        text: qsTr("● Kaydedilmedi")
+                        font.pixelSize: 13
+                        font.bold: true
+                        color: Theme.activeText
+                    }
+                }
+
                 Text {
+                    objectName: "productionProgramName"
                     Layout.fillWidth: true
-                    text: step.axis.name + "  " + step.title
-                    font.pixelSize: 15
+                    text: page.program.name
+                    font.pixelSize: Theme.fontTitle
                     font.bold: true
                     color: Theme.text
                     elide: Text.ElideRight
                 }
+            }
 
-                // Referans noktasında eksene yazılacak değer
-                Text {
-                    text: "→ " + step.axis.homePosition.toFixed(2) + (step.axis.rotary ? "°" : " mm")
-                    font.pixelSize: 12
-                    color: Theme.textMuted
+            // Müşterinin ekranındaki "DOSYA YÜKLE" gibi: kayıtlı bir programı seçip yükler.
+            HmiButton {
+                objectName: "loadProgram"
+                Layout.preferredWidth: 170
+                Layout.preferredHeight: 48
+                font.pixelSize: 15
+                text: qsTr("PROGRAM YÜKLE")
+                enabled: page.machine.cycleState !== Machine.CycleRunning
+                onClicked: page.manager.loadProgram()
+            }
+        }
+
+        // ---------------- Orta: tablo ve boru/kalıp bilgileri ----------------
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 10
+
+            // TASARIM'daki tablonun aynısı; burada yalnızca gösterir ve makinenin
+            // işlediği adımı vurgular.
+            ProgramTable {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                program: page.program
+                currentStep: page.machine.currentStep
+                emptyText: qsTr("Program boş. TASARIM sayfasında adım ekleyin ya da program yükleyin.")
+            }
+
+            // Müşterinin ekranında da bu değerler tablonun sağında duruyor.
+            ColumnLayout {
+                Layout.fillWidth: false
+                Layout.preferredWidth: 186
+                Layout.fillHeight: true
+                spacing: 6
+
+                InfoBox {
+                    objectName: "infoLoadPosition"
+                    caption: qsTr("BORU ALMA KONUM X")
+                    value: page.formatMm(page.machine.loadPosition)
+                }
+
+                InfoBox {
+                    objectName: "infoTubeLength"
+                    caption: qsTr("BORU BOY")
+                    value: page.formatMm(page.program.tubeLength)
+                }
+
+                InfoBox {
+                    caption: qsTr("BORU ÇAPI")
+                    value: page.formatMm(page.program.tubeDiameter)
+                }
+
+                InfoBox {
+                    caption: qsTr("KALIP RADIUS")
+                    value: page.formatMm(page.program.dieRadius)
+                }
+
+                InfoBox {
+                    objectName: "infoDeveloped"
+                    caption: qsTr("AÇINIM BOYU")
+                    value: page.formatMm(page.program.developedLength)
+                }
+
+                Item {
+                    Layout.fillHeight: true
+                }
+            }
+        }
+
+        // ---------------- İlerleme ve durum şeridi ----------------
+        Rectangle {
+            objectName: "readiness"
+            Layout.fillWidth: true
+            implicitHeight: 66
+            radius: Theme.radius
+            color: Theme.field
+            border.color: Theme.panelBorder
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 8
+                radius: Theme.radius
+                color: page.cycleColor
+            }
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 20
+                anchors.rightMargin: 12
+                anchors.topMargin: 8
+                anchors.bottomMargin: 10
+                spacing: 6
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    Text {
+                        objectName: "readinessText"
+                        Layout.fillWidth: true
+                        text: page.cycleText
+                        font.pixelSize: 15
+                        font.bold: true
+                        color: page.cycleTextColor
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        objectName: "stepText"
+                        visible: page.stepText.length > 0
+                        text: page.stepText
+                        font.pixelSize: 15
+                        font.bold: true
+                        color: Theme.text
+                    }
+                }
+
+                // Müşterinin ekranındaki yüzde çubuğunun karşılığı.
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 10
+                    radius: 5
+                    color: Theme.buttonDown
+
+                    Rectangle {
+                        objectName: "progressFill"
+                        width: parent.width * page.progress
+                        height: parent.height
+                        radius: 5
+                        color: page.cycleColor
+
+                        Behavior on width {
+                            NumberAnimation { duration: 150 }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---------------- Alt şerit: hidrolik, referans, mod ve sayaçlar ----------------
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+
+            // Boruyu takarken operatörün pense buradan ulaşması gerekir: müşterinin
+            // ekranında da hidrolik kumandalar üretim sayfasındadır.
+            RowLayout {
+                Layout.fillWidth: false
+                Layout.preferredWidth: 318
+                spacing: 6
+
+                ActuatorButton {
+                    objectName: "prodClampButton"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 96
+                    machine: page.machine
+                    actuator: page.machine.clamp
+                    title: qsTr("MENGENE")
+                    onText: qsTr("KAPALI")
+                    offText: qsTr("AÇIK")
+                    turningOnText: qsTr("KAPANIYOR")
+                    turningOffText: qsTr("AÇILIYOR")
+                }
+
+                ActuatorButton {
+                    objectName: "prodMandrelButton"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 96
+                    machine: page.machine
+                    actuator: page.machine.mandrel
+                    title: qsTr("MALAFA")
+                    onText: qsTr("İLERİDE")
+                    offText: qsTr("GERİDE")
+                    turningOnText: qsTr("İLERİ…")
+                    turningOffText: qsTr("GERİ…")
+                }
+
+                ActuatorButton {
+                    objectName: "prodColletButton"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 96
+                    machine: page.machine
+                    actuator: page.machine.collet
+                    title: qsTr("PENS")
+                    onText: qsTr("KAPALI")
+                    offText: qsTr("AÇIK")
+                    turningOnText: qsTr("KAPANIYOR")
+                    turningOffText: qsTr("AÇILIYOR")
                 }
             }
 
-            // Durum sütunu en uzun yazıya ("Aranıyor…", kalın) göre geniş tutulur.
-            Text {
-                objectName: "homingState"
-                Layout.preferredWidth: 86
-                horizontalAlignment: Text.AlignRight
-                text: step.axis.homed ? qsTr("Tamam")
-                                      : step.axis.homing ? qsTr("Aranıyor…") : qsTr("Bekliyor")
-                font.pixelSize: Theme.fontSmall
-                font.bold: step.axis.homing
-                color: step.axis.homed ? Theme.ok : Theme.textMuted
+            // Referans arama: eksenlerin referans durumu üst şeritteki noktalarda
+            // görünür, burada yalnızca komutu var (müşterinin "HOME SIFIRLAMA"sı gibi).
+            ColumnLayout {
+                Layout.fillWidth: false
+                Layout.preferredWidth: 134
+                spacing: 4
+
+                HmiButton {
+                    objectName: "homeButton"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 72
+                    font.pixelSize: 15
+                    text: page.machine.state === Machine.Ready ? qsTr("TEKRAR\nREFERANS ARA")
+                                                               : qsTr("REFERANS ARA\n(HOME)")
+                    accent: page.machine.state === Machine.Ready ? Theme.text : Theme.active
+                    enabled: page.machine.state !== Machine.Homing && !page.axesLocked
+                    onClicked: page.machine.startHoming()
+                }
+
+                Text {
+                    objectName: "homeHint"
+                    Layout.fillWidth: true
+                    text: page.axesLocked ? (page.machine.axisX.interlock !== Axis.CycleActive
+                                             ? qsTr("Önce mengeneyi açın")
+                                             : page.machine.cycleState === Machine.CycleRunning
+                                               ? qsTr("Döngü çalışıyor") : qsTr("Döngü bekliyor · STOP"))
+                          : page.machine.state === Machine.Ready ? qsTr("Sıra: B → Y → A → X")
+                                                                 : qsTr("Üretimden önce gerekli")
+                    font.pixelSize: 12
+                    font.bold: page.axesLocked
+                    color: page.axesLocked ? Theme.activeText : Theme.textMuted
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                }
+            }
+
+            // Mod seçimi ve sayaçlar: müşterinin ekranında da yan yana duruyor.
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 300
+                spacing: 6
+
+                Text {
+                    text: qsTr("MOD SEÇİMİ")
+                    font.pixelSize: 12
+                    font.bold: true
+                    color: Theme.textMuted
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    ModeButton {
+                        objectName: "modeSemi"
+                        text: qsTr("YARI OTOMATİK")
+                        selected: page.machine.cycleMode === Machine.SemiAutomaticCycle
+                        onClicked: page.machine.cycleMode = Machine.SemiAutomaticCycle
+                    }
+
+                    ModeButton {
+                        objectName: "modeAuto"
+                        text: qsTr("OTOMATİK")
+                        selected: page.machine.cycleMode === Machine.AutomaticCycle
+                        onClicked: page.machine.cycleMode = Machine.AutomaticCycle
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Counter {
+                        objectName: "partCount"
+                        caption: qsTr("ÜRETİLEN ADET")
+                        value: page.machine.partCount
+                    }
+
+                    HmiButton {
+                        objectName: "resetPartCount"
+                        Layout.preferredWidth: 44
+                        Layout.preferredHeight: 44
+                        font.pixelSize: 20
+                        text: "↺"
+                        enabled: page.machine.partCount > 0
+                                 && page.machine.cycleState !== Machine.CycleRunning
+                        onClicked: page.machine.resetPartCount()
+                    }
+
+                    Counter {
+                        objectName: "totalCount"
+                        caption: qsTr("TOPLAM ADET")
+                        value: page.machine.totalCount
+                    }
+                }
             }
         }
     }
 
-    // Küçük bilgi kutusu: üstte başlık, altta değer.
-    component InfoChip: Rectangle {
-        id: chip
+    // Boru ve kalıp bilgisi kutusu: üstte başlık, altta değer.
+    component InfoBox: Rectangle {
+        id: box
 
         required property string caption
         required property string value
 
         Layout.fillWidth: true
-        Layout.preferredWidth: 1
-        implicitHeight: 56
+        implicitHeight: 46
         radius: Theme.radius
         color: Theme.field
         border.color: Theme.panelBorder
@@ -371,22 +502,79 @@ Rectangle {
             anchors.leftMargin: 10
             anchors.rightMargin: 10
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
+            spacing: 1
 
             Text {
                 width: parent.width
-                text: chip.caption
-                font.pixelSize: 12
+                text: box.caption
+                font.pixelSize: 11
                 font.bold: true
                 color: Theme.textMuted
                 elide: Text.ElideRight
             }
 
             Text {
-                objectName: "chipValue"
+                objectName: "boxValue"
                 width: parent.width
-                text: chip.value
-                font.pixelSize: Theme.fontNormal
+                text: box.value
+                font.pixelSize: 15
+                font.bold: true
+                color: Theme.text
+                elide: Text.ElideRight
+            }
+        }
+    }
+
+    // Mod seçimi butonu: seçili olan koyu dolu görünür.
+    component ModeButton: HmiButton {
+        property bool selected: false
+
+        Layout.fillWidth: true
+        Layout.preferredWidth: 1
+        Layout.preferredHeight: 44
+        font.pixelSize: 14
+        accent: Theme.navSelected
+        filled: selected
+        // Mod, döngünün ortasında değişmez: makine de kabul etmez.
+        enabled: page.machine.cycleState !== Machine.CycleRunning
+    }
+
+    // Adet sayacı: üstte başlık, altta sayı.
+    component Counter: Rectangle {
+        id: counter
+
+        required property string caption
+        required property int value
+
+        Layout.fillWidth: true
+        Layout.preferredWidth: 1
+        implicitHeight: 44
+        radius: Theme.radius
+        color: Theme.field
+        border.color: Theme.panelBorder
+
+        Column {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 0
+
+            Text {
+                width: parent.width
+                text: counter.caption
+                font.pixelSize: 11
+                font.bold: true
+                color: Theme.textMuted
+                elide: Text.ElideRight
+            }
+
+            Text {
+                objectName: "counterValue"
+                width: parent.width
+                text: counter.value.toString()
+                font.pixelSize: 18
                 font.bold: true
                 color: Theme.text
                 elide: Text.ElideRight

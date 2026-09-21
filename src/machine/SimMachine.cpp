@@ -37,6 +37,8 @@ SimMachine::SimMachine(QObject *parent)
     // Y'nin sıradaki yeri varsayım: demoda müşteriye sorulacak.
     m_homingOrder = { &m_axes[1], &m_axes[3], &m_axes[2], &m_axes[0] };
 
+    setLoadPosition(SimParameters::LoadPositionX);
+
     // Silindirler açılışta bekleme konumunda (açık / geride).
     m_actuators = { SimActuator { clamp(), SimParameters::ClampTravelSeconds },
                     SimActuator { mandrel(), SimParameters::MandrelTravelSeconds },
@@ -340,21 +342,24 @@ void SimMachine::updateInterlocks()
     const bool axesBusy = state() == Homing || axisX()->isMoving() || axisA()->isMoving()
                           || axisY()->isMoving();
 
-    // Kural 0: üretim döngüsü çalışırken eksenleri ve silindirleri makine sürer;
-    // elle kumanda kilitlidir. (Kilit elle kumanda içindir: döngünün kendi
-    // hareketleri bu kilide takılmaz.)
+    // Kural 0: üretim döngüsü sürerken eksenleri makine sürer; elle kumanda
+    // kilitlidir. Eksenler döngü beklerken de kilitli kalır: operatör boruyu
+    // takarken arabayı oynatırsa döngü kaldığı yerden yanlış devam eder.
+    // Silindirler yalnızca adım işlenirken kilitlenir; boru beklenirken pens
+    // elle kumanda edilebilmelidir.
+    const bool cycleActive = cycleState() != CycleStopped;
     const bool cycleRunning = cycleState() == CycleRunning;
 
     // Kural 1: mengene boruyu tutarken X (ilerletme) ve A (rotasyon) hareket edemez;
     // boru kıskaçtayken çekilir ya da burulur. Y (öteleme) de kilitlenir: sıkılı boruyu
     // yana kaydırmak boruyu zorlar (güvenli taraftaki varsayım). B (büküm) serbesttir.
-    const Axis::Interlock axisLock = cycleRunning ? Axis::CycleRunning
+    const Axis::Interlock axisLock = cycleActive ? Axis::CycleActive
                                      : clampHolding ? Axis::ClampClosed
                                                     : Axis::NoInterlock;
     axisX()->setInterlock(axisLock);
     axisA()->setInterlock(axisLock);
     axisY()->setInterlock(axisLock);
-    axisB()->setInterlock(cycleRunning ? Axis::CycleRunning : Axis::NoInterlock);
+    axisB()->setInterlock(cycleActive ? Axis::CycleActive : Axis::NoInterlock);
 
     // Kural 2: basınç yoksa hiçbir silindir kumanda edilemez.
     // Kural 3: X, A ya da Y hareket ederken mengene kumanda edilemez.

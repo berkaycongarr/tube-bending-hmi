@@ -54,6 +54,14 @@ int main(int argc, char *argv[])
         settings.setValue(QStringLiteral("toplamAdet"), machine.totalCount());
     });
 
+    // Çalışma modu da hatırlanır: operatör her açılışta yeniden seçmesin.
+    if (settings.value(QStringLiteral("yariOtomatik"), false).toBool())
+        machine.setCycleMode(IMachine::SemiAutomaticCycle);
+    QObject::connect(&machine, &IMachine::cycleModeChanged, &settings, [&settings, &machine] {
+        settings.setValue(QStringLiteral("yariOtomatik"),
+                          machine.cycleMode() == IMachine::SemiAutomaticCycle);
+    });
+
     QQmlApplicationEngine engine;
 
     // Main.qml'deki "required property" alanlarını dolduruyoruz.
