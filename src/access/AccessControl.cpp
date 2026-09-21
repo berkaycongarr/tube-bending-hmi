@@ -35,9 +35,25 @@ QString AccessControl::storedDigest() const
     return saved.isEmpty() ? digest(DefaultPin) : saved;
 }
 
+bool AccessControl::validPin(const QString &pin)
+{
+    if (pin.size() < MinimumPinLength || pin.size() > MaximumPinLength)
+        return false;
+    for (const QChar c : pin) {
+        if (c < QLatin1Char('0') || c > QLatin1Char('9'))
+            return false;
+    }
+    return true;
+}
+
+bool AccessControl::isDefaultPin() const
+{
+    return storedDigest() == digest(DefaultPin);
+}
+
 bool AccessControl::unlock(const QString &pin)
 {
-    if (pin.size() < MinimumPinLength || pin.size() > MaximumPinLength || digest(pin) != storedDigest())
+    if (!validPin(pin) || digest(pin) != storedDigest())
         return false;
 
     if (!m_unlocked) {
@@ -63,6 +79,19 @@ void AccessControl::keepAlive()
 {
     if (m_unlocked)
         setRemaining(m_autoLockSeconds);
+}
+
+bool AccessControl::changePin(const QString &pin)
+{
+    if (!m_unlocked || !validPin(pin) || !m_settings)
+        return false;
+
+    // Hemen diske yazılır: elektrik kesilse de yeni şifre geçerli kalsın.
+    m_settings->setValue(DigestKey, digest(pin));
+    m_settings->sync();
+    keepAlive();
+    emit pinChanged();
+    return true;
 }
 
 void AccessControl::setAutoLockSeconds(int seconds)

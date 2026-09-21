@@ -25,6 +25,25 @@ const QString MoveTimeoutKey = QStringLiteral("eksenZamanAsimi");
 const QString ActuatorTimeoutKey = QStringLiteral("silindirZamanAsimi");
 const QString TimersGroup = QStringLiteral("Zamanlar"); // makine.ini'deki bölüm
 
+// AYARLAR: boru alma konumu ve her eksen için limitler ve hızlar. Eksen anahtarları
+// eksenin harfiyle başlar: "xAltLimit", "bJogHizli", "aKonumlama" gibi.
+const QString LoadPositionKey = QStringLiteral("boruAlmaKonumu");
+const QString SettingsGroup = QStringLiteral("Ayarlar");
+const char *const AxisKeys[4] = { "x", "b", "a", "y" }; // m_axes sırası: X, B, A, Y
+
+QString settingKey(int axis, const char *name)
+{
+    return QLatin1String(AxisKeys[axis]) + QLatin1String(name);
+}
+
+// Eksenin yolu ve en yüksek hızı: ayarlar bunun dışına çıkamaz (SimParameters).
+const AxisParameters &physical(int axis)
+{
+    static const AxisParameters axes[4] = { SimParameters::X, SimParameters::B, SimParameters::A,
+                                            SimParameters::Y };
+    return axes[axis];
+}
+
 } // namespace
 
 SimMachine::SimMachine(QObject *parent)
@@ -50,7 +69,6 @@ SimMachine::SimMachine(QObject *parent)
     // Y'nin sıradaki yeri varsayım: demoda müşteriye sorulacak.
     m_homingOrder = { &m_axes[1], &m_axes[3], &m_axes[2], &m_axes[0] };
 
-    setLoadPosition(SimParameters::LoadPositionX);
 
     // Silindirler açılışta bekleme konumunda (açık / geride).
     m_actuators = { SimActuator { clamp(), SimParameters::ClampTravelSeconds },
@@ -58,7 +76,18 @@ SimMachine::SimMachine(QObject *parent)
                     SimActuator { collet(), SimParameters::ColletTravelSeconds } };
 
     defineTimers();
-    connect(timers(), &ParameterList::valueChanged, this, &SimMachine::remember);
+    connect(timers(), &ParameterList::valueChanged, this, [this](const QString &key, double value) {
+        remember(TimersGroup, key, value);
+    });
+
+    defineSettings();
+    applySettings();
+    updateSettingRanges();
+    connect(settings(), &ParameterList::valueChanged, this, [this](const QString &key, double value) {
+        applySettings();
+        updateSettingRanges();
+        remember(SettingsGroup, key, value);
+    });
 
     updateInterlocks();
 
@@ -100,33 +129,132 @@ double SimMachine::timer(const QString &key) const
     return timers()->value(key);
 }
 
+void SimMachine::defineSettings()
+{
+    ParameterList *list = settings();
+    list->add({ LoadPositionKey, tr("BORU ALMA KONUMU X"),
+                tr("Her parça buradan başlar: araba bu konumda bekler, boru burada takılır."),
+                QStringLiteral("mm"), SimParameters::LoadPositionX, SimParameters::X.minPosition,
+                SimParameters::X.maxPosition, 2 });
+
+    const QString names[4] = { tr("X İLERLETME"), tr("B BÜKÜM"), tr("A ROTASYON"), tr("Y ÖTELEME") };
+    for (int i = 0; i < 4; ++i) {
+        const AxisParameters &p = physical(i);
+        const bool rotary = i == 1 || i == 2;
+        const QString unit = rotary ? QStringLiteral("°") : QStringLiteral("mm");
+        const QString speed = rotary ? QStringLiteral("°/s") : QStringLiteral("mm/s");
+        list->add({ settingKey(i, "AltLimit"), names[i] + tr(" · ALT LİMİT"),
+                    tr("Eksen referanslıyken bunun altına gidemez."), unit, p.minPosition, p.minPosition,
+                    p.maxPosition, 2 });
+        list->add({ settingKey(i, "UstLimit"), names[i] + tr(" · ÜST LİMİT"),
+                    tr("Eksen referanslıyken bunun üstüne gidemez."), unit, p.maxPosition, p.minPosition,
+                    p.maxPosition, 2 });
+        list->add({ settingKey(i, "JogYavas"), names[i] + tr(" · JOG YAVAŞ"),
+                    tr("Jog butonuna basılı tutunca eksenin hızı."), speed, p.jogSlow, 0.1, p.maxSpeed, 2 });
+        list->add({ settingKey(i, "JogHizli"), names[i] + tr(" · JOG HIZLI"),
+                    tr("HIZLI seçiliyken jog hızı."), speed, p.jogFast, 0.1, p.maxSpeed, 2 });
+        list->add({ settingKey(i, "Konumlama"), names[i] + tr(" · KONUMLAMA HIZI"),
+                    tr("Konuma gitme ve üretim döngüsündeki hareket hızı."), speed, p.moveSpeed, 1.0,
+                    p.maxSpeed, 2 });
+    }
+}
+
+void SimMachine::applySettings()
+{
+    const ParameterList *list = settings();
+    for (int i = 0; i < 4; ++i) {
+        SimAxis &sim = m_axes[i];
+        sim.params.minPosition = list->value(settingKey(i, "AltLimit"));
+        sim.params.maxPosition = list->value(settingKey(i, "UstLimit"));
+        sim.params.jogSlow = list->value(settingKey(i, "JogYavas"));
+        sim.params.jogFast = list->value(settingKey(i, "JogHizli"));
+        sim.params.moveSpeed = list->value(settingKey(i, "Konumlama"));
+        sim.axis->setLimits(sim.params.minPosition, sim.params.maxPosition);
+        sim.axis->setJogSpeeds(sim.params.jogSlow, sim.params.jogFast);
+        updateLimitState(sim);
+    }
+    setLoadPosition(list->value(LoadPositionKey));
+}
+
+void SimMachine::updateSettingRanges()
+{
+    // Birbirine bağlı değerler: alt limit üst limitin altında kalır (aralarında en az
+    // MinimumLimitSpan), jog yavaş hızlıyı geçmez. Döngü B ve A'yı 0'a döndürür, arabayı
+    // boru alma konumuna götürür: limitler bu noktaları dışarıda bırakamaz.
+    ParameterList *list = settings();
+    const double load = list->value(LoadPositionKey);
+    for (int i = 0; i < 4; ++i) {
+        const AxisParameters &p = physical(i);
+        const double low = list->value(settingKey(i, "AltLimit"));
+        const double high = list->value(settingKey(i, "UstLimit"));
+        double lowMax = high - SimParameters::MinimumLimitSpan;
+        double highMin = low + SimParameters::MinimumLimitSpan;
+        if (i == 0) { // X: boru alma konumu içeride kalmalı
+            lowMax = std::min(lowMax, load);
+            highMin = std::max(highMin, load);
+        } else if (i == 1 || i == 2) { // B ve A: 0 içeride kalmalı
+            lowMax = std::min(lowMax, 0.0);
+            highMin = std::max(highMin, 0.0);
+        }
+        list->setRange(settingKey(i, "AltLimit"), p.minPosition, lowMax);
+        list->setRange(settingKey(i, "UstLimit"), highMin, p.maxPosition);
+
+        const double slow = list->value(settingKey(i, "JogYavas"));
+        const double fast = list->value(settingKey(i, "JogHizli"));
+        list->setRange(settingKey(i, "JogYavas"), 0.1, fast);
+        list->setRange(settingKey(i, "JogHizli"), slow, p.maxSpeed);
+    }
+    list->setRange(LoadPositionKey, list->value(settingKey(0, "AltLimit")),
+                   list->value(settingKey(0, "UstLimit")));
+}
+
+void SimMachine::updateSettingsLock()
+{
+    // Döngü sürerken (operatörü beklerken de) ya da referans aranırken eksenlerin limitleri
+    // ve hızları değişmez: makine o değerlerle çalışıyor.
+    if (cycleState() != CycleStopped)
+        settings()->setLocked(true, tr("Döngü sürerken makinenin ayarları değiştirilemez (önce STOP)."));
+    else if (state() == Homing)
+        settings()->setLocked(true, tr("Referans aranırken makinenin ayarları değiştirilemez."));
+    else
+        settings()->setLocked(false);
+}
+
 void SimMachine::setMemoryFile(const QString &path)
 {
     m_memoryFile = path;
-
-    // Bellekte geçerli bir değer varsa o kullanılır. Sayı olmayan ya da aralık dışındaki
-    // değer (ör. dosya elle bozulmuşsa) yok sayılır: varsayılan kalır.
-    QSettings memory(m_memoryFile, QSettings::IniFormat);
-    memory.beginGroup(TimersGroup);
     m_loadingMemory = true;
-    for (int row = 0; row < timers()->count(); ++row) {
-        const QString key = timers()->get(row).value(QStringLiteral("key")).toString();
-        bool ok = false;
-        const double value = memory.value(key).toDouble(&ok);
-        if (memory.contains(key) && ok)
-            timers()->setValue(key, value);
-    }
+    loadMemory(timers(), TimersGroup);
+    // Ayarlar birbirine bağlı (ör. alt limit üst limitten küçük): bir değerin aralığı
+    // öbürü okununca genişleyebilir. İki tur okumak her sırayı kabul etmeye yeter.
+    loadMemory(settings(), SettingsGroup);
+    loadMemory(settings(), SettingsGroup);
     m_loadingMemory = false;
 }
 
-void SimMachine::remember(const QString &key, double value)
+void SimMachine::loadMemory(ParameterList *list, const QString &group)
+{
+    // Bellekte geçerli bir değer varsa o kullanılır. Sayı olmayan ya da aralık dışındaki
+    // değer (ör. dosya elle bozulmuşsa) yok sayılır: varsayılan kalır.
+    QSettings memory(m_memoryFile, QSettings::IniFormat);
+    memory.beginGroup(group);
+    for (int row = 0; row < list->count(); ++row) {
+        const QString key = list->get(row).value(QStringLiteral("key")).toString();
+        bool ok = false;
+        const double value = memory.value(key).toDouble(&ok);
+        if (memory.contains(key) && ok)
+            list->setValue(key, value);
+    }
+}
+
+void SimMachine::remember(const QString &group, const QString &key, double value)
 {
     if (m_memoryFile.isEmpty() || m_loadingMemory)
         return;
 
     // Hemen diske yazılır (sync): elektrik kesilse de ayar kaybolmasın.
     QSettings memory(m_memoryFile, QSettings::IniFormat);
-    memory.setValue(TimersGroup + QLatin1Char('/') + key, value);
+    memory.setValue(group + QLatin1Char('/') + key, value);
     memory.sync();
 }
 
@@ -330,7 +458,7 @@ void SimMachine::startCycle(const QVariantList &recipe, double dieRadius, double
 
     // Araba, boru alma konumundan açınım boyu kadar daha ilerleyecek: yol yetiyor mu?
     // (Gerçek makinede de tarif, eksen limitlerine sığmalıdır.)
-    if (SimParameters::LoadPositionX + recipeTravel() > m_axes[0].params.maxPosition) {
+    if (loadPosition() + recipeTravel() > m_axes[0].params.maxPosition) {
         m_recipe.clear();
         abortCycle(FaultLimit);
         return;
@@ -473,6 +601,7 @@ void SimMachine::updateInterlocks()
     mandrel()->setInterlock(actuatorLock);
     collet()->setInterlock(actuatorLock);
 
+    updateSettingsLock();
     updateStartBlock();
 }
 
@@ -582,16 +711,19 @@ void SimMachine::updateMotion(double dt)
         }
 
         const double speed = sim.jogFast ? sim.params.jogFast : sim.params.jogSlow;
-        double position = axis->position() + sim.jogDirection * speed * dt;
+        const double current = axis->position();
+        double position = current + sim.jogDirection * speed * dt;
 
-        // Yazılım limitleri yalnızca referanslı eksende geçerli.
+        // Yazılım limitleri yalnızca referanslı eksende geçerli. Yalnızca gidilen yöndeki
+        // limite bakılır: limitler AYARLAR'dan daraltıldıysa dışarıda kalan eksen içeri
+        // doğru gidebilir, dışarı doğru gidemez.
         bool reachedLimit = false;
         if (axis->isHomed()) {
-            if (position >= sim.params.maxPosition) {
-                position = sim.params.maxPosition;
+            if (sim.jogDirection > 0 && position >= sim.params.maxPosition) {
+                position = std::max(current, sim.params.maxPosition);
                 reachedLimit = true;
-            } else if (position <= sim.params.minPosition) {
-                position = sim.params.minPosition;
+            } else if (sim.jogDirection < 0 && position <= sim.params.minPosition) {
+                position = std::min(current, sim.params.minPosition);
                 reachedLimit = true;
             }
         }
@@ -747,7 +879,7 @@ void SimMachine::beginPhase(Phase phase)
         // her parça A = 0'da başlar (SİMÜLASYON'daki şekil de bunu varsayar).
         mandrel()->setCommand(false);
         m_phaseTimeout = timer(MoveTimeoutKey);
-        if (!startMove(feed, SimParameters::LoadPositionX) || !startMove(bend, 0.0)
+        if (!startMove(feed, loadPosition()) || !startMove(bend, 0.0)
             || !startMove(rotate, 0.0))
             abortCycle(FaultLimit);
         break;

@@ -21,7 +21,7 @@ class SimMachine : public IMachine
 public:
     explicit SimMachine(QObject *parent = nullptr);
 
-    // Makinenin belleği: ayarlanabilir değerlerin (ZAMANLAR) saklandığı dosya.
+    // Makinenin belleği: ayarlanabilir değerlerin (ZAMANLAR, AYARLAR) saklandığı dosya.
     // Gerçek makinede bu değerler PLC'nin kalıcı belleğinde durur; sanal makine onları
     // bir .ini dosyasına yazar. Dosyada geçerli bir değer varsa açılışta o kullanılır.
     void setMemoryFile(const QString &path);
@@ -105,9 +105,14 @@ private:
         double value = 0.0;
     };
 
-    void defineTimers();                            // ZAMANLAR'daki süreleri tanımla
-    double timer(const QString &key) const;         // bir sürenin şu anki değeri (sn)
-    void remember(const QString &key, double value); // değişen değeri belleğe yaz
+    void defineTimers();                    // ZAMANLAR'daki süreleri tanımla
+    double timer(const QString &key) const; // bir sürenin şu anki değeri (sn)
+    void defineSettings();                  // AYARLAR'daki değerleri tanımla
+    void applySettings();                   // ayarları eksenlere ve döngüye uygula
+    void updateSettingRanges();             // birbirine bağlı aralıkları yeniden hesapla
+    void updateSettingsLock();              // döngü / referans sürerken ayarlar kilitli
+    void loadMemory(ParameterList *list, const QString &group); // bellekten oku
+    void remember(const QString &group, const QString &key, double value); // belleğe yaz
 
     void tick();                     // döngünün bir turu
     void updatePump(double dt);      // basıncı dt saniye ilerlet

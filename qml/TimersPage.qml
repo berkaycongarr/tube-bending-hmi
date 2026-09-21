@@ -31,9 +31,8 @@ Rectangle {
         keypad.unit = p.unit
         keypad.minimum = p.minimum
         keypad.maximum = p.maximum
-        keypad.note = qsTr("Şu anki değer: %1 · varsayılan: %2")
-                          .arg(page.format(p.value, p.decimals, p.unit))
-                          .arg(page.format(p.defaultValue, p.decimals, p.unit))
+        keypad.defaultValue = p.defaultValue
+        keypad.note = qsTr("Şu anki değer: %1").arg(page.format(p.value, p.decimals, p.unit))
         keypad.open()
     }
 

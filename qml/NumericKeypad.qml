@@ -20,6 +20,8 @@ T.Popup {
     property real minimum: 0
     property real maximum: 0
     property string note          // aralığın altında gösterilen bilgi (ör. şu anki değer)
+    // Varsayılan değer (ayarlarda): verilirse "VARSAYILAN" butonu onu yazar. NaN: buton yok.
+    property real defaultValue: NaN
 
     property bool secret: false   // şifre girişi
     property int secretMinimum: 4 // şifre en az / en çok kaç rakam
@@ -218,6 +220,18 @@ T.Popup {
                     onClicked: pad.press(modelData)
                 }
             }
+        }
+
+        HmiButton {
+            objectName: "keypadDefault"
+            Layout.fillWidth: true
+            Layout.topMargin: 4
+            visible: !pad.secret && !isNaN(pad.defaultValue)
+            implicitHeight: 48
+            font.pixelSize: 16
+            text: qsTr("VARSAYILAN: %1").arg(pad.formatValue(pad.defaultValue))
+            focusPolicy: Qt.NoFocus
+            onClicked: pad.entry = Number(pad.defaultValue.toFixed(2)).toString()
         }
 
         RowLayout {

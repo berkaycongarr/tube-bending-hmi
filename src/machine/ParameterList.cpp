@@ -113,7 +113,7 @@ QVariantMap ParameterList::get(int row) const
 bool ParameterList::setValue(const QString &key, double value)
 {
     const int row = indexOf(key);
-    if (row < 0 || !std::isfinite(value))
+    if (m_locked || row < 0 || !std::isfinite(value))
         return false;
 
     Parameter &p = m_parameters[row];
@@ -126,6 +126,7 @@ bool ParameterList::setValue(const QString &key, double value)
     p.value = v;
     const QModelIndex changed = index(row);
     emit dataChanged(changed, changed, { ValueRole, ModifiedRole });
+    bumpRevision();
     emit valueChanged(p.key, p.value);
     return true;
 }
@@ -134,4 +135,53 @@ bool ParameterList::reset(const QString &key)
 {
     const int row = indexOf(key);
     return row >= 0 && setValue(key, m_parameters.at(row).defaultValue);
+}
+
+bool ParameterList::resetAll()
+{
+    if (m_locked)
+        return false;
+
+    // Varsayılanlar birbirine uyar (aralıklara bakmadan hepsi birden döner); makine,
+    // valueChanged ile her değeri kullanır ve aralıkları yeniden hesaplar.
+    for (int row = 0; row < count(); ++row) {
+        Parameter &p = m_parameters[row];
+        if (p.value == p.defaultValue)
+            continue;
+        p.value = p.defaultValue;
+        emit dataChanged(index(row), index(row), { ValueRole, ModifiedRole });
+        bumpRevision();
+        emit valueChanged(p.key, p.value);
+    }
+    return true;
+}
+
+void ParameterList::setRange(const QString &key, double minimum, double maximum)
+{
+    const int row = indexOf(key);
+    if (row < 0)
+        return;
+    Parameter &p = m_parameters[row];
+    if (p.minimum == minimum && p.maximum == maximum)
+        return;
+    p.minimum = minimum;
+    p.maximum = maximum;
+    emit dataChanged(index(row), index(row), { MinimumRole, MaximumRole });
+    bumpRevision();
+}
+
+void ParameterList::setLocked(bool locked, const QString &reason)
+{
+    const QString newReason = locked ? reason : QString();
+    if (m_locked == locked && m_lockReason == newReason)
+        return;
+    m_locked = locked;
+    m_lockReason = newReason;
+    emit lockedChanged();
+}
+
+void ParameterList::bumpRevision()
+{
+    ++m_revision;
+    emit revisionChanged();
 }

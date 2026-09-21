@@ -21,8 +21,8 @@ Window {
     // main.cpp tarafından verilen ayarcı şifresi denetimi (ayar sayfaları için).
     required property AccessControl access
 
-    // Seçili sayfa: 0 = Üretim, 1 = Tasarım, 2 = Kalıplar, 3 = Hareket, 4 = Zamanlar
-    // (sıra müşterinin ekranındaki menüyle aynı; AYARLAR ve IO TEST sırada)
+    // Seçili sayfa: 0 = Üretim, 1 = Tasarım, 2 = Kalıplar, 3 = Hareket, 4 = Ayarlar,
+    // 5 = Zamanlar (sıra müşterinin ekranındaki menüyle aynı; IO TEST sırada)
     property int currentPage: 0
 
     // Kapanış onaylandı mı? Kaydedilmemiş değişiklik varsa pencere hemen kapanmaz,
@@ -292,11 +292,19 @@ Window {
                     }
 
                     NavButton {
+                        objectName: "navSettings"
+                        Layout.fillWidth: true
+                        text: qsTr("AYARLAR")
+                        selected: root.currentPage === 4
+                        onClicked: root.currentPage = 4
+                    }
+
+                    NavButton {
                         objectName: "navTimers"
                         Layout.fillWidth: true
                         text: qsTr("ZAMANLAR")
-                        selected: root.currentPage === 4
-                        onClicked: root.currentPage = 4
+                        selected: root.currentPage === 5
+                        onClicked: root.currentPage = 5
                     }
 
                     Item {
@@ -333,6 +341,11 @@ Window {
 
                 MotionPage {
                     machine: root.machine
+                }
+
+                SettingsPage {
+                    machine: root.machine
+                    access: root.access
                 }
 
                 TimersPage {

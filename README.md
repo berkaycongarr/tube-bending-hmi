@@ -25,7 +25,8 @@ Ekranın sol altındaki "SANAL MAKİNE" yazısı bunu hatırlatır.
 | A | Rotasyon: boru kendi ekseninde döner | ° |
 | Y | Öteleme (varsayım; görevi, aralığı ve hızları müşteriye sorulacak) | mm |
 
-Referans arama sırası: B → Y → A → X. Tüm değerler `src/machine/SimParameters.h` içinde.
+Referans arama sırası: B → Y → A → X. Eksenlerin yolu, varsayılan limitleri ve hızları
+`src/machine/SimParameters.h` içinde; limitler ve hızlar AYARLAR sayfasından değişir.
 
 ## Mimari
 
@@ -124,11 +125,34 @@ Basınç kesilirse ya da bir aşama beklenen sürede bitmezse döngü arızayla 
 olduğu gibi kalır — yarıda kalan bir parçada mengenenin kendiliğinden açılması tehlikelidir,
 kararı operatör verir.
 
-Varsayımlar (demoda müşteriye sorulacak): boru alma konumu (`src/machine/SimParameters.h`),
+Varsayımlar (demoda müşteriye sorulacak): boru alma konumunun varsayılanı (500 mm),
 ZAMANLAR'daki sürelerin kendileri ve varsayılan değerleri, BÜK ile ROTASYON değerlerinin
 mutlak olması, BÜKÜMDE İLERLE'nin "araba motorla itilir" anlamına gelmesi.
 
-## Zamanlar ve ayarcı şifresi
+## Ayarlar, zamanlar ve ayarcı şifresi
+
+**AYARLAR** sayfası makinenin ayarlarını gösterir ve değiştirir:
+
+- **Eksenler** (X, B, A, Y): alt ve üst yazılım limiti, jog yavaş ve hızlı hızı, konumlama hızı
+  (konuma gitme ve üretim döngüsündeki hareket)
+- **Boru alma konumu X**: her parça buradan başlar (ÜRETİM'deki BORU ALMA KONUM X)
+- **Ayarcı şifresi**: ŞİFREYİ DEĞİŞTİR (yeni şifre iki kez yazılır)
+
+Değerler birbirine bağlıdır ve tuş takımı her değerin o anki aralığını gösterir:
+
+- Limitler eksenin yolunun dışına çıkamaz, yalnızca daraltılabilir; alt ve üst limit
+  arasında en az 10 mm (ya da 10°) kalır.
+- Döngünün gittiği noktalar limitlerin içinde kalmalı: B ve A için 0, X için boru alma
+  konumu. (Önce boru alma konumu taşınır, sonra X limiti daraltılır.)
+- Jog yavaş, jog hızlıyı geçemez; hızlar eksenin en yüksek hızını aşamaz.
+- Limit değişince programdaki adımların sınırları da değişir: aşan adım kırmızı görünür.
+- Limitler daraltıldığında dışarıda kalan eksen içeri doğru jog'lanabilir, dışarı doğru
+  gidemez (yerinden sıçramaz).
+
+Döngü sürerken (operatörü beklerken de) ve referans aranırken ayarlar kilitlidir: makine o
+değerlerle çalışıyor; sayfa nedenini yazar. **VARSAYILANLARA DÖN** (onay sorularak)
+bütün ayarları varsayılana döndürür; tek bir değer için tuş takımındaki VARSAYILAN butonu
+kullanılır.
 
 **ZAMANLAR** sayfası makinenin sürelerini gösterir ve değiştirir:
 
@@ -140,8 +164,8 @@ mutlak olması, BÜKÜMDE İLERLE'nin "araba motorla itilir" anlamına gelmesi.
 | Eksen zaman aşımı | 45 s | 5 – 300 s | Bir eksen hareketi bu sürede bitmezse döngü arızayla durur |
 | Silindir zaman aşımı | 8 s | 1 – 60 s | Mengene, malafa ya da pens bu sürede yerine gitmezse arıza |
 
-Süreler makinenin belleğinde durur: gerçek makinede PLC'nin kalıcı belleğinde, sanal
-makinede `Belgeler\BoruBukme\makine.ini` dosyasında. Değişen süre hemen geçerli olur;
+Süreler ve ayarlar makinenin belleğinde durur: gerçek makinede PLC'nin kalıcı belleğinde,
+sanal makinede `Belgeler\BoruBukme\makine.ini` dosyasında. Değişen süre hemen geçerli olur;
 döngü sürerken değiştirilirse sıradaki aşamada kullanılır. Varsayılandan farklı olan
 sürenin "Varsayılan" yazısı turuncudur; ↺ varsayılana döndürür. Dosyada sayı olmayan ya
 da aralık dışında bir değer varsa yok sayılır, varsayılan kullanılır.
@@ -150,9 +174,10 @@ Değerleri herkes görür; değiştirmek için **ayarcı şifresi** gerekir (san
 yetki seviyesi: operatör üretir, ayarcı makineyi ayarlar). **Varsayılan şifre: `1234`.**
 Kilit açılınca 10 dakika açık kalır, her değişiklikte süre baştan başlar; süre dolunca
 kendiliğinden kilitlenir. Kilit açıkken ekranın altında "AYAR AÇIK" yazar; ona ya da
-KİLİTLE'ye dokununca hemen kilitlenir. Uygulama her açılışta kilitli başlar. Şifrenin
-kendisi hiçbir yerde saklanmaz; değiştirilirse yalnızca özeti (SHA-256) `ayarlar.ini`
-içinde durur. (Şifreyi değiştirme AYARLAR sayfasıyla gelecek.)
+KİLİTLE'ye dokununca hemen kilitlenir. Uygulama her açılışta kilitli başlar. Şifre
+AYARLAR sayfasından değiştirilir. Şifrenin kendisi hiçbir yerde saklanmaz; yalnızca özeti
+(SHA-256) `ayarlar.ini` içinde durur. Şifre unutulursa `ayarlar.ini` dosyasından
+`ayarciSifreOzeti` satırı silinir: varsayılan şifre (`1234`) geri gelir.
 
 ## Parçanın şekli ve SİMÜLASYON
 
@@ -197,8 +222,8 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `src/program/ProgramStore.*` | Program deposu: klasördeki dosyalar, aç / kaydet / sil |
 | `src/program/PartShape.*` | Parçanın şekli: programdan borunun eksen çizgisini (3B) hesaplar |
 | `src/tooling/DieLibrary.*` | Kalıp kütüphanesi: kalıplar, takılı kalıp, `kaliplar.json` biçimi |
-| `src/machine/ParameterList.*` | Makinenin ayarlanabilir değerleri (süreler): başlık, birim, varsayılan, aralık |
-| `src/access/AccessControl.*` | Ayarcı şifresi: kilidi açma, kendiliğinden kilitlenme, şifre özeti |
+| `src/machine/ParameterList.*` | Makinenin ayarlanabilir değerleri (süreler, ayarlar): başlık, birim, varsayılan, aralık, kilit |
+| `src/access/AccessControl.*` | Ayarcı şifresi: kilidi açma, kendiliğinden kilitlenme, şifre değiştirme ve özeti |
 | `qml/Main.qml` | Ana çerçeve: üst şerit (durum, eksenler, BAŞLAT/STOP), sol menü, sayfalar |
 | `qml/ProductionPage.qml` | Üretim sayfası: açık program, LİSTE / SİMÜLASYON, takılı kalıp, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |
 | `qml/DesignPage.qml` | Tasarım sayfası: LİSTE (program tablosu) / SİMÜLASYON, boru ve kalıp, takılı kalıba uyum, açınım boyu |
@@ -212,6 +237,7 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `qml/NameDialog.qml` | Program adı girme penceresi |
 | `qml/ConfirmDialog.qml` | Onay ve bilgi penceresi |
 | `qml/MotionPage.qml` | Hareket sayfası: jog, hedef konuma gitme ve hidrolik |
+| `qml/SettingsPage.qml` | Ayarlar sayfası: eksen limitleri ve hızları, boru alma konumu, şifre değiştirme |
 | `qml/TimersPage.qml` | Zamanlar sayfası: makinenin süreleri, varsayılana dönme |
 | `qml/LockBar.qml` | Ayar kilidi şeridi ve şifre sorma (ayar sayfaları için) |
 | `qml/Theme.qml` | Renkler ve ölçüler |
@@ -219,7 +245,7 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `qml/JogButton.qml` | Push buton mantığıyla jog butonu |
 | `qml/NavButton.qml` | Sol menü butonu |
 | `qml/ValueField.qml` | Dokununca tuş takımı açan değer alanı |
-| `qml/NumericKeypad.qml` | Dokunmatik sayı tuş takımı (aralık denetimli; şifre için gizli yazım) |
+| `qml/NumericKeypad.qml` | Dokunmatik sayı tuş takımı (aralık denetimli, VARSAYILAN butonu; şifre için gizli yazım) |
 | `qml/PumpControl.qml` | Hidrolik pompa: START/STOP, durum ve basınç |
 | `qml/ActuatorButton.qml` | Kalıcı buton mantığıyla silindir kumandası |
 | `qml/AxisDisplay.qml` | Eksen konum göstergesi |

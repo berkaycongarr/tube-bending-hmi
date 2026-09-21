@@ -18,7 +18,8 @@ class QSettings;
 // Uygulama her açıldığında kilitli başlar.
 //
 // Şifrenin kendisi saklanmaz, yalnızca özeti (SHA-256) ayarlar dosyasında durur.
-// Dosyada özet yoksa varsayılan şifre geçerlidir (README'de yazılı).
+// Dosyada özet yoksa varsayılan şifre geçerlidir (README'de yazılı). Şifre, kilit
+// açıkken AYARLAR sayfasından değiştirilir.
 class AccessControl : public QObject
 {
     Q_OBJECT
@@ -29,6 +30,7 @@ class AccessControl : public QObject
     Q_PROPERTY(int remainingSeconds READ remainingSeconds NOTIFY remainingSecondsChanged)
     Q_PROPERTY(int minimumPinLength READ minimumPinLength CONSTANT)
     Q_PROPERTY(int maximumPinLength READ maximumPinLength CONSTANT)
+    Q_PROPERTY(bool defaultPin READ isDefaultPin NOTIFY pinChanged)
 
 public:
     static constexpr int DefaultAutoLockSeconds = 600; // 10 dakika
@@ -42,12 +44,16 @@ public:
     int remainingSeconds() const { return m_remaining; } // kilitlenmeye kalan süre
     int minimumPinLength() const { return MinimumPinLength; }
     int maximumPinLength() const { return MaximumPinLength; }
+    bool isDefaultPin() const; // varsayılan şifre mi kullanılıyor? (değiştirilmesi önerilir)
 
     // Şifre doğruysa kilidi açar (true); yanlışsa kilitli kalır (false).
     Q_INVOKABLE bool unlock(const QString &pin);
     Q_INVOKABLE void lock();
     // Kilit açıkken bir değişiklik yapıldı: kilitlenme süresi baştan başlar.
     Q_INVOKABLE void keepAlive();
+
+    // Yeni şifre: yalnızca kilit açıkken; 4-8 rakam. Özeti hemen dosyaya yazılır.
+    Q_INVOKABLE bool changePin(const QString &pin);
 
     // Kendiliğinden kilitlenme süresi (testler kısaltır).
     void setAutoLockSeconds(int seconds);
@@ -56,9 +62,11 @@ public:
 signals:
     void unlockedChanged();
     void remainingSecondsChanged();
+    void pinChanged();
 
 private:
     static QString digest(const QString &pin); // şifrenin özeti
+    static bool validPin(const QString &pin);  // 4-8 rakam mı?
     QString storedDigest() const;              // dosyadaki özet ya da varsayılanınki
     void setRemaining(int seconds);
     void countDown();

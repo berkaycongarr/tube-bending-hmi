@@ -51,6 +51,7 @@ qt_add_qml_module(appBoruHmi
         qml/PartView.qml
         qml/LockBar.qml
         qml/TimersPage.qml
+        qml/SettingsPage.qml
     SOURCES
         src/machine/Actuator.h
         src/machine/Axis.h

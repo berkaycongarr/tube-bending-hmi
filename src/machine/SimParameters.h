@@ -4,6 +4,9 @@
 // Değerler şimdilik tahmini; müşteriden gerçek değerler gelince burası güncellenecek.
 
 // Bir eksenin ayarları. Birim: X ve Y için mm ve mm/sn, B ve A için derece ve derece/sn.
+// Limitler, jog ve konumlama hızları varsayılandır: ayarcı AYARLAR sayfasından değiştirir.
+// Limitler yalnızca daraltılabilir (buradaki limitler eksenin yoludur); hızlar maxSpeed'i
+// aşamaz. Referans hızları ve referans noktası makineyi kuranın ayarıdır, ekranda yoktur.
 struct AxisParameters
 {
     double minPosition;    // yazılım limiti, alt
@@ -16,6 +19,7 @@ struct AxisParameters
     double jogSlow;        // jog hızı, yavaş
     double jogFast;        // jog hızı, hızlı
     double moveSpeed;      // konuma gitme hızı
+    double maxSpeed;       // eksenin çıkabileceği en yüksek hız
 };
 
 namespace SimParameters {
@@ -23,15 +27,18 @@ namespace SimParameters {
 // X'in referansı öbür uçta: fotoğraflarda X, referans ararken artıyordu.
 // Y (öteleme) bir varsayımdır: fotoğraflarda etiketi okunmuyor. Müşterinin tablosundaki
 // ÖTELEME (mm) sütununun ekseni olduğunu düşünüyoruz; aralık ve hızlar demoda sorulacak.
-//                                      min     max  başlangıç  referans  ref.hızlı  ref.yavaş  yavaşla  jog.yavaş  jog.hızlı  konumlama
-inline constexpr AxisParameters X = {    0.0, 3000.0,  1693.35,   3000.0,     400.0,      40.0,    40.0,      25.0,     150.0,      400.0 };
-inline constexpr AxisParameters B = {    0.0,  190.0,     37.5,      0.0,      90.0,      12.0,    12.0,       5.0,      30.0,       45.0 };
-inline constexpr AxisParameters A = { -360.0,  360.0,     90.0,      0.0,      90.0,      12.0,    12.0,      10.0,      60.0,       90.0 };
-inline constexpr AxisParameters Y = {    0.0,  150.0,     42.0,      0.0,      30.0,       5.0,     5.0,       5.0,      25.0,       40.0 };
+//                                      min     max  başlangıç  referans  ref.hızlı  ref.yavaş  yavaşla  jog.yavaş  jog.hızlı  konumlama  en yüksek
+inline constexpr AxisParameters X = {    0.0, 3000.0,  1693.35,   3000.0,     400.0,      40.0,    40.0,      25.0,     150.0,      400.0,     600.0 };
+inline constexpr AxisParameters B = {    0.0,  190.0,     37.5,      0.0,      90.0,      12.0,    12.0,       5.0,      30.0,       45.0,      90.0 };
+inline constexpr AxisParameters A = { -360.0,  360.0,     90.0,      0.0,      90.0,      12.0,    12.0,      10.0,      60.0,       90.0,     180.0 };
+inline constexpr AxisParameters Y = {    0.0,  150.0,     42.0,      0.0,      30.0,       5.0,     5.0,       5.0,      25.0,       40.0,      60.0 };
+
+// Alt ve üst limit arasında en az bu kadar yol kalmalı (mm ya da derece).
+inline constexpr double MinimumLimitSpan = 10.0;
 
 // Üretim döngüsü. Bu değerler de varsayım; demoda müşteriye sorulacak.
 // (Malafalı büküm ve bükümde ilerle kalıbın ayarıdır: KALIPLAR sayfasından gelir.)
-inline constexpr double LoadPositionX = 500.0; // boru alma konumu (müşterinin ekranında da var)
+inline constexpr double LoadPositionX = 500.0; // boru alma konumu varsayılanı (AYARLAR'dan değişir)
 
 // Döngünün süreleri. Bunlar varsayılanlar: ayarcı ZAMANLAR sayfasından değiştirir,
 // değişen değerler makinenin belleğinde (sanal makinede makine.ini) saklanır.

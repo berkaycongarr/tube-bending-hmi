@@ -43,13 +43,14 @@ class IMachine : public QObject
     Q_PROPERTY(CycleMode cycleMode READ cycleMode WRITE setCycleMode NOTIFY cycleModeChanged)
     Q_PROPERTY(int partCount READ partCount NOTIFY countersChanged)
     Q_PROPERTY(int totalCount READ totalCount NOTIFY countersChanged)
-    Q_PROPERTY(double loadPosition READ loadPosition CONSTANT)
+    Q_PROPERTY(double loadPosition READ loadPosition NOTIFY loadPositionChanged)
     Q_PROPERTY(bool hasTooling READ hasTooling NOTIFY toolingChanged)
     Q_PROPERTY(double toolingRadius READ toolingRadius NOTIFY toolingChanged)
     Q_PROPERTY(double toolingDiameter READ toolingDiameter NOTIFY toolingChanged)
     Q_PROPERTY(bool toolingMandrel READ toolingMandrel NOTIFY toolingChanged)
     Q_PROPERTY(bool toolingFeedDuringBend READ toolingFeedDuringBend NOTIFY toolingChanged)
     Q_PROPERTY(ParameterList *timers READ timers CONSTANT)
+    Q_PROPERTY(ParameterList *settings READ settings CONSTANT)
 
 public:
     enum State {
@@ -122,6 +123,7 @@ public:
         , m_mandrel(new Actuator(this))
         , m_collet(new Actuator(this))
         , m_timers(new ParameterList(this))
+        , m_settings(new ParameterList(this))
     {
     }
 
@@ -141,6 +143,10 @@ public:
     // Değerler makinenin belleğinde durur (gerçek makinede PLC); ekran okur ve yazar.
     // Hangi sürelerin olduğunu makine belirler (anahtarlar SimMachine.cpp'de).
     ParameterList *timers() const { return m_timers; }
+
+    // Makinenin ayarları (AYARLAR sayfası): boru alma konumu, eksenlerin yazılım limitleri
+    // ve hızları. Döngü sürerken ya da referans aranırken makine bu listeyi kilitler.
+    ParameterList *settings() const { return m_settings; }
 
     // Sanal makine mi? Ekranda "SANAL MAKİNE" etiketi göstermek için.
     virtual bool isSimulation() const = 0;
@@ -234,7 +240,7 @@ public:
     int totalCount() const { return m_totalCount; } // makinenin toplam adedi
 
     // Boru alma konumu: her parça buradan başlar, boru burada takılır (mm).
-    // Müşterinin ekranında "BORU ALMA KONUM X" olarak görünüyor.
+    // Müşterinin ekranında "BORU ALMA KONUM X" olarak görünüyor; AYARLAR'dan değişir.
     double loadPosition() const { return m_loadPosition; }
 
     CycleMode cycleMode() const { return m_cycleMode; }
@@ -267,10 +273,17 @@ signals:
     void startBlockChanged();
     void countersChanged();
     void toolingChanged();
+    void loadPositionChanged();
 
 protected:
-    // Boru alma konumu makinenin ayarıdır: alt sınıf açılışta bir kez yazar.
-    void setLoadPosition(double position) { m_loadPosition = position; }
+    // Boru alma konumu makinenin ayarıdır: alt sınıf yazar (açılışta ve ayar değişince).
+    void setLoadPosition(double position)
+    {
+        if (m_loadPosition == position)
+            return;
+        m_loadPosition = position;
+        emit loadPositionChanged();
+    }
 
     // Bu değerleri yalnızca alt sınıflar değiştirebilir.
     void setState(State state)
@@ -368,4 +381,5 @@ private:
     Actuator *const m_mandrel;
     Actuator *const m_collet;
     ParameterList *const m_timers;
+    ParameterList *const m_settings;
 };

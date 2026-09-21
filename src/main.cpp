@@ -19,12 +19,18 @@ int main(int argc, char *argv[])
 
     // Büküm programı (reçete). Adımların alabileceği değerler makinenin eksen
     // limitlerinden gelir: program, makinenin yapamayacağı bir adım içeremez.
+    // Limitler AYARLAR'dan değişince adımların sınırları da değişir (aşan adım kırmızı olur).
     BendProgram program;
-    program.setStepLimits(BendProgram::Feed, 0.1,
-                          machine.axisX()->maxPosition() - machine.axisX()->minPosition());
-    program.setStepLimits(BendProgram::Bend, 0.1, machine.axisB()->maxPosition());
-    program.setStepLimits(BendProgram::Rotate, machine.axisA()->minPosition(),
-                          machine.axisA()->maxPosition());
+    auto applyStepLimits = [&program, &machine] {
+        program.setStepLimits(BendProgram::Feed, 0.1,
+                              machine.axisX()->maxPosition() - machine.axisX()->minPosition());
+        program.setStepLimits(BendProgram::Bend, 0.1, machine.axisB()->maxPosition());
+        program.setStepLimits(BendProgram::Rotate, machine.axisA()->minPosition(),
+                              machine.axisA()->maxPosition());
+    };
+    applyStepLimits();
+    for (Axis *axis : { machine.axisX(), machine.axisB(), machine.axisA() })
+        QObject::connect(axis, &Axis::parametersChanged, &program, applyStepLimits);
 
     // Programlar Belgeler\BoruBukme\Programlar klasöründe, her biri ayrı bir dosya.
     // Gerçek makinede burası sabit bir klasör ya da fabrikanın ağ klasörü olabilir.
@@ -32,8 +38,8 @@ int main(int argc, char *argv[])
                                + QStringLiteral("/BoruBukme");
     ProgramStore store(dataFolder + QStringLiteral("/Programlar"), &program);
 
-    // Makinenin belleği: ZAMANLAR'daki süreler. Gerçek makinede bu değerler PLC'nin
-    // kalıcı belleğinde durur; sanal makine onları bir dosyada saklar.
+    // Makinenin belleği: ZAMANLAR'daki süreler ve AYARLAR'daki değerler. Gerçek makinede
+    // bu değerler PLC'nin kalıcı belleğinde durur; sanal makine onları bir dosyada saklar.
     machine.setMemoryFile(dataFolder + QStringLiteral("/makine.ini"));
 
     // Ekranın ayarları (son açılan program, toplam adet, takılı kalıp, çalışma modu,
