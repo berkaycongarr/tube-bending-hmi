@@ -18,8 +18,11 @@ Window {
     // main.cpp tarafından verilen kalıp kütüphanesi (Belgeler\BoruBukme\kaliplar.json).
     required property DieLibrary dies
 
-    // Seçili sayfa: 0 = Üretim, 1 = Tasarım, 2 = Kalıplar, 3 = Hareket
-    // (sıra müşterinin ekranındaki menüyle aynı)
+    // main.cpp tarafından verilen ayarcı şifresi denetimi (ayar sayfaları için).
+    required property AccessControl access
+
+    // Seçili sayfa: 0 = Üretim, 1 = Tasarım, 2 = Kalıplar, 3 = Hareket, 4 = Zamanlar
+    // (sıra müşterinin ekranındaki menüyle aynı; AYARLAR ve IO TEST sırada)
     property int currentPage: 0
 
     // Kapanış onaylandı mı? Kaydedilmemiş değişiklik varsa pencere hemen kapanmaz,
@@ -288,6 +291,14 @@ Window {
                         onClicked: root.currentPage = 3
                     }
 
+                    NavButton {
+                        objectName: "navTimers"
+                        Layout.fillWidth: true
+                        text: qsTr("ZAMANLAR")
+                        selected: root.currentPage === 4
+                        onClicked: root.currentPage = 4
+                    }
+
                     Item {
                         Layout.fillHeight: true
                     }
@@ -323,6 +334,11 @@ Window {
                 MotionPage {
                     machine: root.machine
                 }
+
+                TimersPage {
+                    machine: root.machine
+                    access: root.access
+                }
             }
         }
 
@@ -349,6 +365,32 @@ Window {
                     font.pixelSize: Theme.fontSmall
                     font.bold: true
                     color: Theme.text
+                }
+            }
+
+            // Ayar kilidi açıkken her sayfadan görünür; dokununca hemen kilitlenir.
+            Rectangle {
+                objectName: "accessBadge"
+                visible: root.access.unlocked
+                implicitWidth: accessText.implicitWidth + 28
+                implicitHeight: 30
+                radius: 15
+                color: Theme.ok
+
+                Text {
+                    id: accessText
+
+                    anchors.centerIn: parent
+                    text: qsTr("AYAR AÇIK · %1 · KİLİTLE").arg(
+                              Math.floor(root.access.remainingSeconds / 60) + ":"
+                              + String(root.access.remainingSeconds % 60).padStart(2, "0"))
+                    font.pixelSize: Theme.fontSmall
+                    font.bold: true
+                    color: "white"
+                }
+
+                TapHandler {
+                    onTapped: root.access.lock()
                 }
             }
 

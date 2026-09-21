@@ -31,9 +31,15 @@ inline constexpr AxisParameters Y = {    0.0,  150.0,     42.0,      0.0,      3
 
 // Üretim döngüsü. Bu değerler de varsayım; demoda müşteriye sorulacak.
 // (Malafalı büküm ve bükümde ilerle kalıbın ayarıdır: KALIPLAR sayfasından gelir.)
-inline constexpr double LoadPositionX = 500.0;      // boru alma konumu (müşterinin ekranında da var)
-inline constexpr double StepPauseSeconds = 0.3;     // adımlar arasında kısa duraklama
-inline constexpr double MoveTimeoutSeconds = 45.0;  // eksen hareketi bu sürede bitmezse arıza
+inline constexpr double LoadPositionX = 500.0; // boru alma konumu (müşterinin ekranında da var)
+
+// Döngünün süreleri. Bunlar varsayılanlar: ayarcı ZAMANLAR sayfasından değiştirir,
+// değişen değerler makinenin belleğinde (sanal makinede makine.ini) saklanır.
+// Aralıklar ve açıklamalar SimMachine.cpp'de (defineTimers).
+inline constexpr double ClampDwellSeconds = 0.2;      // mengene kapanınca, büküme başlamadan önce
+inline constexpr double BendDwellSeconds = 0.3;       // büküm açısında, mengene açılmadan önce
+inline constexpr double StepPauseSeconds = 0.3;       // adımlar arasında (otomatik çalışmada)
+inline constexpr double MoveTimeoutSeconds = 45.0;    // eksen hareketi bu sürede bitmezse arıza
 inline constexpr double ActuatorTimeoutSeconds = 8.0; // silindir bu sürede yerine gitmezse arıza
 
 inline constexpr int TickIntervalMs = 20;   // döngü aralığı: saniyede 50 tur

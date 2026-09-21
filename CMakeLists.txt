@@ -49,10 +49,14 @@ qt_add_qml_module(appBoruHmi
         qml/DieDialog.qml
         qml/ViewTabs.qml
         qml/PartView.qml
+        qml/LockBar.qml
+        qml/TimersPage.qml
     SOURCES
         src/machine/Actuator.h
         src/machine/Axis.h
         src/machine/IMachine.h
+        src/machine/ParameterList.h
+        src/machine/ParameterList.cpp
         src/machine/SimParameters.h
         src/machine/SimMachine.h
         src/machine/SimMachine.cpp
@@ -64,11 +68,13 @@ qt_add_qml_module(appBoruHmi
         src/program/PartShape.cpp
         src/tooling/DieLibrary.h
         src/tooling/DieLibrary.cpp
+        src/access/AccessControl.h
+        src/access/AccessControl.cpp
 )
 
 # Qt'nin ürettiği kayıt kodu başlık dosyalarını yalnızca adıyla çağırır
 # (#include <Axis.h>). Bu yüzden klasörleri arama yoluna ekliyoruz.
-target_include_directories(appBoruHmi PRIVATE src/machine src/program src/tooling)
+target_include_directories(appBoruHmi PRIVATE src/machine src/program src/tooling src/access)
 
 # Windows'ta programın arkasında siyah konsol penceresi açılmasın.
 set_target_properties(appBoruHmi PROPERTIES

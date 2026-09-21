@@ -21,6 +21,11 @@ class SimMachine : public IMachine
 public:
     explicit SimMachine(QObject *parent = nullptr);
 
+    // Makinenin belleği: ayarlanabilir değerlerin (ZAMANLAR) saklandığı dosya.
+    // Gerçek makinede bu değerler PLC'nin kalıcı belleğinde durur; sanal makine onları
+    // bir .ini dosyasına yazar. Dosyada geçerli bir değer varsa açılışta o kullanılır.
+    void setMemoryFile(const QString &path);
+
     bool isSimulation() const override { return true; }
     void startHoming() override;
     void stop() override;
@@ -82,7 +87,9 @@ private:
         MandrelOut,     // malafa ileri
         Feed,           // İLERLE: araba boruyu iter
         ClampClose,     // mengene kapanır (büküm öncesi)
+        ClampDwell,     // mengene kapalı bekler (ZAMANLAR: mengene kapanınca bekleme)
         Bend,           // büküm kolu açıya döner; araba yayı takip eder
+        BendDwell,      // kol açıda bekler (ZAMANLAR: bükümde bekleme)
         ClampOpen,      // mengene açılır
         BendHome,       // büküm kolu 0'a döner
         Rotate,         // boru kendi ekseninde döner
@@ -97,6 +104,10 @@ private:
         int command = 0;
         double value = 0.0;
     };
+
+    void defineTimers();                            // ZAMANLAR'daki süreleri tanımla
+    double timer(const QString &key) const;         // bir sürenin şu anki değeri (sn)
+    void remember(const QString &key, double value); // değişen değeri belleğe yaz
 
     void tick();                     // döngünün bir turu
     void updatePump(double dt);      // basıncı dt saniye ilerlet
@@ -142,4 +153,7 @@ private:
     int m_stepIndex = 0;               // işlenen program adımı
     double m_bendStartX = 0.0;         // büküm başlarken arabanın konumu
     double m_bendStartAngle = 0.0;     // büküm başlarken kolun açısı
+
+    QString m_memoryFile;         // makinenin belleği (boşsa değerler saklanmaz)
+    bool m_loadingMemory = false; // bellekten okunurken yeniden yazılmasın
 };

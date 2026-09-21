@@ -3,6 +3,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 
+#include "access/AccessControl.h"
 #include "machine/SimMachine.h"
 #include "program/BendProgram.h"
 #include "program/ProgramStore.h"
@@ -31,8 +32,16 @@ int main(int argc, char *argv[])
                                + QStringLiteral("/BoruBukme");
     ProgramStore store(dataFolder + QStringLiteral("/Programlar"), &program);
 
-    // Uygulamanın ayarları (şimdilik yalnızca son açılan program) küçük bir metin dosyasında.
+    // Makinenin belleği: ZAMANLAR'daki süreler. Gerçek makinede bu değerler PLC'nin
+    // kalıcı belleğinde durur; sanal makine onları bir dosyada saklar.
+    machine.setMemoryFile(dataFolder + QStringLiteral("/makine.ini"));
+
+    // Ekranın ayarları (son açılan program, toplam adet, takılı kalıp, çalışma modu,
+    // ayarcı şifresinin özeti) küçük bir metin dosyasında.
     QSettings settings(dataFolder + QStringLiteral("/ayarlar.ini"), QSettings::IniFormat);
+
+    // Ayarcı şifresi: ayar sayfalarında değerleri değiştirmek için.
+    AccessControl access(&settings);
 
     // Açılış: son kullanılan program; o açılamazsa klasördeki ilk program.
     // Klasör boşsa örnek program oraya kaydedilir (demoda liste boş görünmesin).
@@ -105,6 +114,7 @@ int main(int argc, char *argv[])
         { QStringLiteral("program"), QVariant::fromValue(&program) },
         { QStringLiteral("store"), QVariant::fromValue(&store) },
         { QStringLiteral("dies"), QVariant::fromValue(&dies) },
+        { QStringLiteral("access"), QVariant::fromValue(&access) },
     });
 
     // QML dosyası yüklenemezse (yazım hatası vb.) programı kapat.

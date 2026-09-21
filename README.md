@@ -93,7 +93,8 @@ Bir parçanın sırası:
 3. Kalıp malafalıysa (MALAFALI BÜK) malafa ileri çıkar
 4. Program adımları sırayla işlenir:
    - **İLERLE** (göreli): araba boruyu bu kadar mm ilerletir
-   - **BÜK** (mutlak açı): mengene kapanır → kol açıya döner → mengene açılır → kol başa döner.
+   - **BÜK** (mutlak açı): mengene kapanır → (bekleme) → kol açıya döner → (bekleme) →
+     mengene açılır → kol başa döner. Bekleme süreleri ZAMANLAR sayfasındadır.
      Pens boruyu tuttuğu için büküm sırasında araba yayı takip eder (yay boyu = kalıp
      yarıçapı × açı), böylece arabanın gittiği toplam yol programın açınım boyuna eşit olur.
      BÜKÜMDE İLERLE açıksa araba motorla itilir (destek), kapalıysa boru onu sürükler;
@@ -123,9 +124,35 @@ Basınç kesilirse ya da bir aşama beklenen sürede bitmezse döngü arızayla 
 olduğu gibi kalır — yarıda kalan bir parçada mengenenin kendiliğinden açılması tehlikelidir,
 kararı operatör verir.
 
-Varsayımlar (demoda müşteriye sorulacak): boru alma konumu, adım arası duraklama ve zaman
-aşımı süreleri (`src/machine/SimParameters.h`), BÜK ile ROTASYON değerlerinin mutlak olması,
-BÜKÜMDE İLERLE'nin "araba motorla itilir" anlamına gelmesi.
+Varsayımlar (demoda müşteriye sorulacak): boru alma konumu (`src/machine/SimParameters.h`),
+ZAMANLAR'daki sürelerin kendileri ve varsayılan değerleri, BÜK ile ROTASYON değerlerinin
+mutlak olması, BÜKÜMDE İLERLE'nin "araba motorla itilir" anlamına gelmesi.
+
+## Zamanlar ve ayarcı şifresi
+
+**ZAMANLAR** sayfası makinenin sürelerini gösterir ve değiştirir:
+
+| Süre | Varsayılan | Aralık | Ne zaman |
+|---|---|---|---|
+| Mengene kapanınca bekleme | 0.20 s | 0 – 5 s | Mengene kapandıktan sonra, büküme başlamadan önce |
+| Bükümde bekleme | 0.30 s | 0 – 5 s | Kol açıya varınca, mengene açılmadan önce (geri esneme azalır) |
+| Adım arası bekleme | 0.30 s | 0 – 5 s | Otomatik çalışmada iki adım arasında |
+| Eksen zaman aşımı | 45 s | 5 – 300 s | Bir eksen hareketi bu sürede bitmezse döngü arızayla durur |
+| Silindir zaman aşımı | 8 s | 1 – 60 s | Mengene, malafa ya da pens bu sürede yerine gitmezse arıza |
+
+Süreler makinenin belleğinde durur: gerçek makinede PLC'nin kalıcı belleğinde, sanal
+makinede `Belgeler\BoruBukme\makine.ini` dosyasında. Değişen süre hemen geçerli olur;
+döngü sürerken değiştirilirse sıradaki aşamada kullanılır. Varsayılandan farklı olan
+sürenin "Varsayılan" yazısı turuncudur; ↺ varsayılana döndürür. Dosyada sayı olmayan ya
+da aralık dışında bir değer varsa yok sayılır, varsayılan kullanılır.
+
+Değerleri herkes görür; değiştirmek için **ayarcı şifresi** gerekir (sanayi ekranlarındaki
+yetki seviyesi: operatör üretir, ayarcı makineyi ayarlar). **Varsayılan şifre: `1234`.**
+Kilit açılınca 10 dakika açık kalır, her değişiklikte süre baştan başlar; süre dolunca
+kendiliğinden kilitlenir. Kilit açıkken ekranın altında "AYAR AÇIK" yazar; ona ya da
+KİLİTLE'ye dokununca hemen kilitlenir. Uygulama her açılışta kilitli başlar. Şifrenin
+kendisi hiçbir yerde saklanmaz; değiştirilirse yalnızca özeti (SHA-256) `ayarlar.ini`
+içinde durur. (Şifreyi değiştirme AYARLAR sayfasıyla gelecek.)
 
 ## Parçanın şekli ve SİMÜLASYON
 
@@ -165,11 +192,13 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `src/machine/Actuator.h` | Hidrolik silindir: komut, sensör durumu ve kilit |
 | `src/machine/IMachine.h` | Makine sözleşmesi: ekranın tanıdığı tek sınıf |
 | `src/machine/SimMachine.*` | Sanal makine (demo) |
-| `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, süreler |
+| `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, sürelerin varsayılanları |
 | `src/program/BendProgram.*` | Büküm programı (reçete): komut listesi, açınım boyu, doğrulama, JSON biçimi |
 | `src/program/ProgramStore.*` | Program deposu: klasördeki dosyalar, aç / kaydet / sil |
 | `src/program/PartShape.*` | Parçanın şekli: programdan borunun eksen çizgisini (3B) hesaplar |
 | `src/tooling/DieLibrary.*` | Kalıp kütüphanesi: kalıplar, takılı kalıp, `kaliplar.json` biçimi |
+| `src/machine/ParameterList.*` | Makinenin ayarlanabilir değerleri (süreler): başlık, birim, varsayılan, aralık |
+| `src/access/AccessControl.*` | Ayarcı şifresi: kilidi açma, kendiliğinden kilitlenme, şifre özeti |
 | `qml/Main.qml` | Ana çerçeve: üst şerit (durum, eksenler, BAŞLAT/STOP), sol menü, sayfalar |
 | `qml/ProductionPage.qml` | Üretim sayfası: açık program, LİSTE / SİMÜLASYON, takılı kalıp, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |
 | `qml/DesignPage.qml` | Tasarım sayfası: LİSTE (program tablosu) / SİMÜLASYON, boru ve kalıp, takılı kalıba uyum, açınım boyu |
@@ -183,12 +212,14 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `qml/NameDialog.qml` | Program adı girme penceresi |
 | `qml/ConfirmDialog.qml` | Onay ve bilgi penceresi |
 | `qml/MotionPage.qml` | Hareket sayfası: jog, hedef konuma gitme ve hidrolik |
+| `qml/TimersPage.qml` | Zamanlar sayfası: makinenin süreleri, varsayılana dönme |
+| `qml/LockBar.qml` | Ayar kilidi şeridi ve şifre sorma (ayar sayfaları için) |
 | `qml/Theme.qml` | Renkler ve ölçüler |
 | `qml/HmiButton.qml` | Dokunmatik buton |
 | `qml/JogButton.qml` | Push buton mantığıyla jog butonu |
 | `qml/NavButton.qml` | Sol menü butonu |
 | `qml/ValueField.qml` | Dokununca tuş takımı açan değer alanı |
-| `qml/NumericKeypad.qml` | Dokunmatik sayı tuş takımı (aralık denetimli) |
+| `qml/NumericKeypad.qml` | Dokunmatik sayı tuş takımı (aralık denetimli; şifre için gizli yazım) |
 | `qml/PumpControl.qml` | Hidrolik pompa: START/STOP, durum ve basınç |
 | `qml/ActuatorButton.qml` | Kalıcı buton mantığıyla silindir kumandası |
 | `qml/AxisDisplay.qml` | Eksen konum göstergesi |

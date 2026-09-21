@@ -8,6 +8,7 @@
 
 #include "Actuator.h"
 #include "Axis.h"
+#include "ParameterList.h"
 
 // Makineyle konuşma sözleşmesi.
 //
@@ -48,6 +49,7 @@ class IMachine : public QObject
     Q_PROPERTY(double toolingDiameter READ toolingDiameter NOTIFY toolingChanged)
     Q_PROPERTY(bool toolingMandrel READ toolingMandrel NOTIFY toolingChanged)
     Q_PROPERTY(bool toolingFeedDuringBend READ toolingFeedDuringBend NOTIFY toolingChanged)
+    Q_PROPERTY(ParameterList *timers READ timers CONSTANT)
 
 public:
     enum State {
@@ -119,6 +121,7 @@ public:
         , m_clamp(new Actuator(this))
         , m_mandrel(new Actuator(this))
         , m_collet(new Actuator(this))
+        , m_timers(new ParameterList(this))
     {
     }
 
@@ -134,7 +137,12 @@ public:
     Actuator *mandrel() const { return m_mandrel; } // malafa: bükülen yerde borunun içine girer
     Actuator *collet() const { return m_collet; }   // pens: arabada borunun ucunu tutar
 
-    // Sanal makine mi? Ekranda "SİMÜLASYON" etiketi göstermek için.
+    // Makinenin süreleri (ZAMANLAR sayfası): bekleme süreleri ve zaman aşımları.
+    // Değerler makinenin belleğinde durur (gerçek makinede PLC); ekran okur ve yazar.
+    // Hangi sürelerin olduğunu makine belirler (anahtarlar SimMachine.cpp'de).
+    ParameterList *timers() const { return m_timers; }
+
+    // Sanal makine mi? Ekranda "SANAL MAKİNE" etiketi göstermek için.
     virtual bool isSimulation() const = 0;
 
     // Komutlar: ekrandaki butonlar bunları çağırır.
@@ -359,4 +367,5 @@ private:
     Actuator *const m_clamp;
     Actuator *const m_mandrel;
     Actuator *const m_collet;
+    ParameterList *const m_timers;
 };

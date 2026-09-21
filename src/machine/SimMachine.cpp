@@ -1,5 +1,6 @@
 #include "SimMachine.h"
 
+#include <QSettings>
 #include <QtMath>
 
 #include <cmath>
@@ -15,6 +16,14 @@ constexpr int RotateCommand = 2; // ROTASYON (mutlak açı, derece)
 // Program ile takılı kalıbın yarıçapı ve boru çapı bu kadar farklıysa "aynı" sayılır
 // (ondalıklı sayılar dosyadan okunurken en küçük basamakta sapabilir).
 constexpr double ToolingTolerance = 0.005; // mm
+
+// ZAMANLAR: sürelerin anahtarları. Makinenin belleğinde (makine.ini) de bu adlarla durur.
+const QString ClampDwellKey = QStringLiteral("mengeneBekleme");
+const QString BendDwellKey = QStringLiteral("bukumBekleme");
+const QString StepPauseKey = QStringLiteral("adimArasiBekleme");
+const QString MoveTimeoutKey = QStringLiteral("eksenZamanAsimi");
+const QString ActuatorTimeoutKey = QStringLiteral("silindirZamanAsimi");
+const QString TimersGroup = QStringLiteral("Zamanlar"); // makine.ini'deki bölüm
 
 } // namespace
 
@@ -48,11 +57,77 @@ SimMachine::SimMachine(QObject *parent)
                     SimActuator { mandrel(), SimParameters::MandrelTravelSeconds },
                     SimActuator { collet(), SimParameters::ColletTravelSeconds } };
 
+    defineTimers();
+    connect(timers(), &ParameterList::valueChanged, this, &SimMachine::remember);
+
     updateInterlocks();
 
     connect(&m_timer, &QTimer::timeout, this, &SimMachine::tick);
     m_timer.start(SimParameters::TickIntervalMs);
     m_clock.start();
+}
+
+// ---------------------------------------------------------------------------
+// Makinenin süreleri ve belleği
+// ---------------------------------------------------------------------------
+
+void SimMachine::defineTimers()
+{
+    // Değerler ve aralıklar varsayım: gerçek makinenin süreleri demoda sorulacak.
+    // Süreler döngü sürerken de değiştirilebilir: yeni değer, sıradaki aşamada geçerli olur.
+    ParameterList *list = timers();
+    list->add({ ClampDwellKey, tr("MENGENE KAPANINCA BEKLEME"),
+                tr("Mengene kapandıktan sonra büküme başlamadan önce beklenir: basınç otursun, "
+                   "boru kaymasın."),
+                QStringLiteral("s"), SimParameters::ClampDwellSeconds, 0.0, 5.0, 2 });
+    list->add({ BendDwellKey, tr("BÜKÜMDE BEKLEME"),
+                tr("Büküm kolu açıya varınca mengene açılmadan önce beklenir: boru biçimini alır, "
+                   "geri esnemesi azalır."),
+                QStringLiteral("s"), SimParameters::BendDwellSeconds, 0.0, 5.0, 2 });
+    list->add({ StepPauseKey, tr("ADIM ARASI BEKLEME"),
+                tr("Otomatik çalışmada bir adım bitince sıradakine geçmeden önce beklenir."),
+                QStringLiteral("s"), SimParameters::StepPauseSeconds, 0.0, 5.0, 2 });
+    list->add({ MoveTimeoutKey, tr("EKSEN ZAMAN AŞIMI"),
+                tr("Bir eksen hareketi bu sürede bitmezse döngü arızayla durur."),
+                QStringLiteral("s"), SimParameters::MoveTimeoutSeconds, 5.0, 300.0, 2 });
+    list->add({ ActuatorTimeoutKey, tr("SİLİNDİR ZAMAN AŞIMI"),
+                tr("Mengene, malafa ya da pens bu sürede yerine gitmezse döngü arızayla durur."),
+                QStringLiteral("s"), SimParameters::ActuatorTimeoutSeconds, 1.0, 60.0, 2 });
+}
+
+double SimMachine::timer(const QString &key) const
+{
+    return timers()->value(key);
+}
+
+void SimMachine::setMemoryFile(const QString &path)
+{
+    m_memoryFile = path;
+
+    // Bellekte geçerli bir değer varsa o kullanılır. Sayı olmayan ya da aralık dışındaki
+    // değer (ör. dosya elle bozulmuşsa) yok sayılır: varsayılan kalır.
+    QSettings memory(m_memoryFile, QSettings::IniFormat);
+    memory.beginGroup(TimersGroup);
+    m_loadingMemory = true;
+    for (int row = 0; row < timers()->count(); ++row) {
+        const QString key = timers()->get(row).value(QStringLiteral("key")).toString();
+        bool ok = false;
+        const double value = memory.value(key).toDouble(&ok);
+        if (memory.contains(key) && ok)
+            timers()->setValue(key, value);
+    }
+    m_loadingMemory = false;
+}
+
+void SimMachine::remember(const QString &key, double value)
+{
+    if (m_memoryFile.isEmpty() || m_loadingMemory)
+        return;
+
+    // Hemen diske yazılır (sync): elektrik kesilse de ayar kaybolmasın.
+    QSettings memory(m_memoryFile, QSettings::IniFormat);
+    memory.setValue(TimersGroup + QLatin1Char('/') + key, value);
+    memory.sync();
 }
 
 // ---------------------------------------------------------------------------
@@ -592,12 +667,22 @@ void SimMachine::updateCycle(double dt)
 
     case Phase::ClampClose:
         if (actuatorAt(clamp(), true))
+            beginPhase(Phase::ClampDwell);
+        break;
+
+    case Phase::ClampDwell:
+        if (m_phaseTime >= timer(ClampDwellKey))
             beginPhase(Phase::Bend);
         break;
 
     case Phase::Bend:
         followBend();
         if (axisIdle(bend))
+            beginPhase(Phase::BendDwell);
+        break;
+
+    case Phase::BendDwell:
+        if (m_phaseTime >= timer(BendDwellKey))
             beginPhase(Phase::ClampOpen);
         break;
 
@@ -617,7 +702,7 @@ void SimMachine::updateCycle(double dt)
         break;
 
     case Phase::StepPause:
-        if (m_phaseTime >= SimParameters::StepPauseSeconds)
+        if (m_phaseTime >= timer(StepPauseKey))
             beginStep();
         break;
 
@@ -661,7 +746,7 @@ void SimMachine::beginPhase(Phase phase)
         // ROTASYON değerleri mutlak olduğu için borunun başlangıç açısı bilinmeli:
         // her parça A = 0'da başlar (SİMÜLASYON'daki şekil de bunu varsayar).
         mandrel()->setCommand(false);
-        m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
+        m_phaseTimeout = timer(MoveTimeoutKey);
         if (!startMove(feed, SimParameters::LoadPositionX) || !startMove(bend, 0.0)
             || !startMove(rotate, 0.0))
             abortCycle(FaultLimit);
@@ -671,44 +756,48 @@ void SimMachine::beginPhase(Phase phase)
         // Malafalı büküm takılı kalıbın ayarıdır (müşterinin ekranında MALAFALI BÜK).
         if (toolingMandrel())
             mandrel()->setCommand(true);
-        m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
+        m_phaseTimeout = timer(ActuatorTimeoutKey);
         break;
 
     case Phase::Feed:
         // İLERLE göreli: araba bulunduğu yerden bu kadar daha ilerler.
-        m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
+        m_phaseTimeout = timer(MoveTimeoutKey);
         if (!startMove(feed, feed.axis->position() + step.value))
             abortCycle(FaultLimit);
         break;
 
     case Phase::ClampClose:
         clamp()->setCommand(true);
-        m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
+        m_phaseTimeout = timer(ActuatorTimeoutKey);
         break;
+
+    case Phase::ClampDwell:
+    case Phase::BendDwell:
+        break; // yalnızca süre bekler (süre ZAMANLAR'dan)
 
     case Phase::Bend:
         // Büküm sırasında araba yayı takip edecek: başlangıç noktaları saklanır.
         m_bendStartX = feed.axis->position();
         m_bendStartAngle = bend.axis->position();
-        m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
+        m_phaseTimeout = timer(MoveTimeoutKey);
         if (!startMove(bend, step.value))
             abortCycle(FaultLimit);
         break;
 
     case Phase::ClampOpen:
         clamp()->setCommand(false);
-        m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
+        m_phaseTimeout = timer(ActuatorTimeoutKey);
         break;
 
     case Phase::BendHome:
         // Kol başa döner; boru olduğu yerde kalır (araba geri gelmez).
-        m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
+        m_phaseTimeout = timer(MoveTimeoutKey);
         if (!startMove(bend, 0.0))
             abortCycle(FaultLimit);
         break;
 
     case Phase::Rotate:
-        m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
+        m_phaseTimeout = timer(MoveTimeoutKey);
         if (!startMove(rotate, step.value))
             abortCycle(FaultLimit);
         break;
@@ -718,12 +807,12 @@ void SimMachine::beginPhase(Phase phase)
 
     case Phase::MandrelBack:
         mandrel()->setCommand(false);
-        m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
+        m_phaseTimeout = timer(ActuatorTimeoutKey);
         break;
 
     case Phase::ColletOpen:
         collet()->setCommand(false);
-        m_phaseTimeout = SimParameters::ActuatorTimeoutSeconds;
+        m_phaseTimeout = timer(ActuatorTimeoutKey);
         break;
     }
 }
