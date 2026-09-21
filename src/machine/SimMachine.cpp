@@ -569,7 +569,7 @@ void SimMachine::updateCycle(double dt)
         break;
 
     case Phase::ToLoadPosition:
-        if (!axisIdle(feed) || !axisIdle(bend) || !actuatorAt(mandrel(), false))
+        if (!axisIdle(feed) || !axisIdle(bend) || !axisIdle(rotate) || !actuatorAt(mandrel(), false))
             break;
         // Boru takılı mı? Pens açıksa operatör beklenir.
         if (!actuatorAt(collet(), true)) {
@@ -656,11 +656,14 @@ void SimMachine::beginPhase(Phase phase)
         break;
 
     case Phase::ToLoadPosition:
-        // Parçanın başı: malafa geri çekilir, büküm kolu başa döner, araba boru
-        // alma konumuna gider. Böylece her parça aynı yerden başlar.
+        // Parçanın başı: malafa geri çekilir, büküm kolu ve rotasyon başa döner,
+        // araba boru alma konumuna gider. Böylece her parça aynı yerden başlar.
+        // ROTASYON değerleri mutlak olduğu için borunun başlangıç açısı bilinmeli:
+        // her parça A = 0'da başlar (SİMÜLASYON'daki şekil de bunu varsayar).
         mandrel()->setCommand(false);
         m_phaseTimeout = SimParameters::MoveTimeoutSeconds;
-        if (!startMove(feed, SimParameters::LoadPositionX) || !startMove(bend, 0.0))
+        if (!startMove(feed, SimParameters::LoadPositionX) || !startMove(bend, 0.0)
+            || !startMove(rotate, 0.0))
             abortCycle(FaultLimit);
         break;
 

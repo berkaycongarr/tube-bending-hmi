@@ -58,6 +58,8 @@ qt_add_qml_module(appBoruHmi
         src/program/BendProgram.cpp
         src/program/ProgramStore.h
         src/program/ProgramStore.cpp
+        src/program/PartShape.h
+        src/program/PartShape.cpp
         src/tooling/DieLibrary.h
         src/tooling/DieLibrary.cpp
 )

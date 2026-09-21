@@ -86,7 +86,8 @@ bile makine parçayı bitirir. `SimMachine` bunu bir PLC adım zinciri gibi uygu
 
 Bir parçanın sırası:
 
-1. Araba boru alma konumuna (X = 500 mm), büküm kolu başa (B = 0) gider, malafa geri çekilir
+1. Araba boru alma konumuna (X = 500 mm), büküm kolu ve rotasyon başa (B = 0, A = 0) gider,
+   malafa geri çekilir. ROTASYON değerleri mutlak olduğu için her parça A = 0'da başlar
 2. Pens açıksa boru beklenir: operatör boruyu takıp pensi kapatır, START'a basar
 3. Kalıp malafalıysa (MALAFALI BÜK) malafa ileri çıkar
 4. Program adımları sırayla işlenir:
@@ -125,6 +126,21 @@ Varsayımlar (demoda müşteriye sorulacak): boru alma konumu, adım arası dura
 aşımı süreleri (`src/machine/SimParameters.h`), BÜK ile ROTASYON değerlerinin mutlak olması,
 BÜKÜMDE İLERLE'nin "araba motorla itilir" anlamına gelmesi.
 
+## Parçanın şekli
+
+`PartShape`, programdan parçanın şeklini hesaplar: borunun eksen çizgisini (merkez hattını)
+üç boyutta çıkarır. Şekli SİMÜLASYON sekmesi çizecek; hesap çizimden ayrıdır ve ekransız
+test edilir. Program her değiştiğinde (adım, açı, kalıp yarıçapı) şekil yeniden hesaplanır.
+
+Hesap, borunun ekseni boyunca yönünü bilen bir okla yürür: İLERLE oku düz ilerletir, BÜK oku
+kalıp yarıçapında bir yay üzerinde döndürür, ROTASYON ise sonraki dirseklerin düzlemini
+değiştirir. Parça (0, 0, 0)'dan +X yönünde başlar, ilk dirsek +Y'ye döner; rotasyonsuz parça
+tek düzlemde kalır. Eksen çizgisinin boyu programın açınım boyuna eşittir.
+
+Varsayımlar: açılar programdaki gibi alınır (boru esnemesi hesaba katılmaz); ROTASYON'un
+dönüş yönü müşteriye sorulacak. Yön ters çıkarsa parça ayna görüntüsü gibi çizilir;
+düzeltmek için `PartShape.cpp`'de tek bir işaret değişir.
+
 ## Klasör yapısı
 
 | Dosya | Görevi |
@@ -137,6 +153,7 @@ BÜKÜMDE İLERLE'nin "araba motorla itilir" anlamına gelmesi.
 | `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, süreler |
 | `src/program/BendProgram.*` | Büküm programı (reçete): komut listesi, açınım boyu, doğrulama, JSON biçimi |
 | `src/program/ProgramStore.*` | Program deposu: klasördeki dosyalar, aç / kaydet / sil |
+| `src/program/PartShape.*` | Parçanın şekli: programdan borunun eksen çizgisini (3B) hesaplar |
 | `src/tooling/DieLibrary.*` | Kalıp kütüphanesi: kalıplar, takılı kalıp, `kaliplar.json` biçimi |
 | `qml/Main.qml` | Ana çerçeve: üst şerit (durum, eksenler, BAŞLAT/STOP), sol menü, sayfalar |
 | `qml/ProductionPage.qml` | Üretim sayfası: açık program, takılı kalıp, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |

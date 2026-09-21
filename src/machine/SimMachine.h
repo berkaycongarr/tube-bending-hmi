@@ -74,11 +74,11 @@ private:
     };
 
     // Üretim döngüsünün aşamaları. Sıra: araba boru alma konumuna gider (büküm
-    // kolu da başa döner), boru takılır, malafa ileri çıkar, sonra programın
-    // adımları işlenir; parça bitince malafa geri alınır ve pens açılır.
+    // kolu ve rotasyon da başa döner), boru takılır, malafa ileri çıkar, sonra
+    // programın adımları işlenir; parça bitince malafa geri alınır ve pens açılır.
     enum class Phase {
         None,
-        ToLoadPosition, // araba boru alma konumuna, büküm kolu 0'a gider
+        ToLoadPosition, // araba boru alma konumuna, büküm kolu ve rotasyon 0'a gider
         MandrelOut,     // malafa ileri
         Feed,           // İLERLE: araba boruyu iter
         ClampClose,     // mengene kapanır (büküm öncesi)
