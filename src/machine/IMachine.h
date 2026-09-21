@@ -8,6 +8,7 @@
 
 #include "Actuator.h"
 #include "Axis.h"
+#include "IoList.h"
 #include "ParameterList.h"
 
 // Makineyle konuşma sözleşmesi.
@@ -51,6 +52,8 @@ class IMachine : public QObject
     Q_PROPERTY(bool toolingFeedDuringBend READ toolingFeedDuringBend NOTIFY toolingChanged)
     Q_PROPERTY(ParameterList *timers READ timers CONSTANT)
     Q_PROPERTY(ParameterList *settings READ settings CONSTANT)
+    Q_PROPERTY(IoList *inputs READ inputs CONSTANT)
+    Q_PROPERTY(IoList *outputs READ outputs CONSTANT)
 
 public:
     enum State {
@@ -124,6 +127,8 @@ public:
         , m_collet(new Actuator(this))
         , m_timers(new ParameterList(this))
         , m_settings(new ParameterList(this))
+        , m_inputs(new IoList(this))
+        , m_outputs(new IoList(this))
     {
     }
 
@@ -147,6 +152,12 @@ public:
     // Makinenin ayarları (AYARLAR sayfası): boru alma konumu, eksenlerin yazılım limitleri
     // ve hızları. Döngü sürerken ya da referans aranırken makine bu listeyi kilitler.
     ParameterList *settings() const { return m_settings; }
+
+    // Makinenin girişleri (sensörler, şalterler) ve çıkışları (pompa, valfler): IO TEST
+    // sayfası bunları canlı gösterir. Hangi noktaların olduğunu ve adreslerini makine
+    // belirler (demoda SimMachine.cpp'de; gerçek makinede elektrik şemasından).
+    IoList *inputs() const { return m_inputs; }
+    IoList *outputs() const { return m_outputs; }
 
     // Sanal makine mi? Ekranda "SANAL MAKİNE" etiketi göstermek için.
     virtual bool isSimulation() const = 0;
@@ -177,6 +188,12 @@ public:
     // Silindir, "kalıcı buton" mantığıyla: bir basış iş konumuna gönderir
     // (on = true), ikinci basış geri alır. Komutu makine hatırlar.
     Q_INVOKABLE virtual void setActuator(Actuator *actuator, bool on) = 0;
+
+    // Çıkış testi (IO TEST): bir çıkışı adresiyle elle sür (on = 1 ya da 0). Çıkışı sürmek,
+    // makinenin o çıkışa bağlı komutunu vermektir (pompa START/STOP, silindir valfi):
+    // makinenin kilitleri burada da geçerlidir. Makine kabul etmezse false döner: adres
+    // bilinmiyor ya da çıkışın kilidi var (outputs listesindeki "lock", ör. döngü sürüyor).
+    Q_INVOKABLE virtual bool setOutput(const QString &address, bool on) = 0;
 
     // Takılı kalıp -----------------------------------------------------------
     // Makineye hangi kalıbın takılı olduğunu ekran bildirir: kalıp yarıçapı (yay
@@ -382,4 +399,6 @@ private:
     Actuator *const m_collet;
     ParameterList *const m_timers;
     ParameterList *const m_settings;
+    IoList *const m_inputs;
+    IoList *const m_outputs;
 };

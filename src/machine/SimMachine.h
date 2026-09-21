@@ -36,6 +36,7 @@ public:
     void startPump() override;
     void stopPump() override;
     void setActuator(Actuator *actuator, bool on) override;
+    bool setOutput(const QString &address, bool on) override;
     void startCycle(const QVariantList &recipe, double dieRadius, double tubeDiameter) override;
     void resetPartCount() override;
     bool setTooling(double dieRadius, double tubeDiameter, bool mandrel, bool feedDuringBend) override;
@@ -113,6 +114,9 @@ private:
     void updateSettingsLock();              // döngü / referans sürerken ayarlar kilitli
     void loadMemory(ParameterList *list, const QString &group); // bellekten oku
     void remember(const QString &group, const QString &key, double value); // belleğe yaz
+    void defineIo();                                // IO TEST'teki giriş ve çıkışları tanımla
+    void updateIo();                                // girişlerin, çıkışların durumu ve kilitleri
+    QString outputLock(const Actuator *valve) const; // çıkış neden sürülemiyor? (pompa: nullptr)
 
     void tick();                     // döngünün bir turu
     void updatePump(double dt);      // basıncı dt saniye ilerlet

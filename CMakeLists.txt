@@ -52,12 +52,15 @@ qt_add_qml_module(appBoruHmi
         qml/LockBar.qml
         qml/TimersPage.qml
         qml/SettingsPage.qml
+        qml/IoTestPage.qml
     SOURCES
         src/machine/Actuator.h
         src/machine/Axis.h
         src/machine/IMachine.h
         src/machine/ParameterList.h
         src/machine/ParameterList.cpp
+        src/machine/IoList.h
+        src/machine/IoList.cpp
         src/machine/SimParameters.h
         src/machine/SimMachine.h
         src/machine/SimMachine.cpp

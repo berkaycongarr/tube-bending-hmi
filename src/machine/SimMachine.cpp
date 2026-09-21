@@ -36,6 +36,21 @@ QString settingKey(int axis, const char *name)
     return QLatin1String(AxisKeys[axis]) + QLatin1String(name);
 }
 
+// IO TEST: girişlerin ve çıkışların adresleri. Adresler Siemens biçiminde örnektir (I giriş,
+// Q çıkış, "bayt.bit"): gerçek makinenin adresleri elektrik şemasından alınacak.
+const QString PressureSwitchInput = QStringLiteral("I0.0");
+const QString ClampOpenInput = QStringLiteral("I0.1");
+const QString ClampClosedInput = QStringLiteral("I0.2");
+const QString MandrelBackInput = QStringLiteral("I0.3");
+const QString MandrelForwardInput = QStringLiteral("I0.4");
+const QString ColletOpenInput = QStringLiteral("I0.5");
+const QString ColletClosedInput = QStringLiteral("I0.6");
+const char *const HomeSensorInputs[4] = { "I1.0", "I1.1", "I1.2", "I1.3" }; // m_axes sırası: X, B, A, Y
+const QString PumpOutput = QStringLiteral("Q0.0");
+const QString ClampOutput = QStringLiteral("Q0.1");
+const QString MandrelOutput = QStringLiteral("Q0.2");
+const QString ColletOutput = QStringLiteral("Q0.3");
+
 // Eksenin yolu ve en yüksek hızı: ayarlar bunun dışına çıkamaz (SimParameters).
 const AxisParameters &physical(int axis)
 {
@@ -89,7 +104,9 @@ SimMachine::SimMachine(QObject *parent)
         remember(SettingsGroup, key, value);
     });
 
+    defineIo();
     updateInterlocks();
+    updateIo();
 
     connect(&m_timer, &QTimer::timeout, this, &SimMachine::tick);
     m_timer.start(SimParameters::TickIntervalMs);
@@ -259,6 +276,93 @@ void SimMachine::remember(const QString &group, const QString &key, double value
 }
 
 // ---------------------------------------------------------------------------
+// Girişler ve çıkışlar (IO TEST)
+// ---------------------------------------------------------------------------
+
+void SimMachine::defineIo()
+{
+    // Silindirlerin iki ucunda birer sensör var: biri bekleme konumunu (açık / geride),
+    // öbürü iş konumunu (kapalı / ileride) görür. Silindir yoldayken ikisi de 0'dır.
+    IoList *in = inputs();
+    in->add(PressureSwitchInput, tr("BASINÇ ŞALTERİ"));
+    in->add(ClampOpenInput, tr("MENGENE AÇIK"));
+    in->add(ClampClosedInput, tr("MENGENE KAPALI"));
+    in->add(MandrelBackInput, tr("MALAFA GERİDE"));
+    in->add(MandrelForwardInput, tr("MALAFA İLERİDE"));
+    in->add(ColletOpenInput, tr("PENS AÇIK"));
+    in->add(ColletClosedInput, tr("PENS KAPALI"));
+    const QString homeNames[4] = { tr("X REFERANS SENSÖRÜ"), tr("B REFERANS SENSÖRÜ"),
+                                   tr("A REFERANS SENSÖRÜ"), tr("Y REFERANS SENSÖRÜ") };
+    for (int i = 0; i < 4; ++i)
+        in->add(QLatin1String(HomeSensorInputs[i]), homeNames[i]);
+
+    // Valfler tek bobinli varsayıldı (müşteriye sorulacak): bobine enerji verilince (1)
+    // silindir iş konumuna gider, enerji kesilince (0) geri döner. Çift bobinli valfte
+    // her yön ayrı bir çıkıştır.
+    IoList *out = outputs();
+    out->add(PumpOutput, tr("POMPA MOTORU"), tr("1: pompa çalışır, basınç oluşur"));
+    out->add(ClampOutput, tr("MENGENE KAPAT VALFİ"), tr("1: mengene kapanır · 0: açılır"));
+    out->add(MandrelOutput, tr("MALAFA İLERİ VALFİ"), tr("1: malafa ileri · 0: geri"));
+    out->add(ColletOutput, tr("PENS KAPAT VALFİ"), tr("1: pens kapanır · 0: açılır"));
+}
+
+void SimMachine::updateIo()
+{
+    // Girişler: sensörlerin gördüğü. Basınç şalteri, basınç çalışma basıncına ulaşınca 1 olur
+    // (makine silindirleri de ancak o zaman sürer).
+    IoList *in = inputs();
+    in->setActive(PressureSwitchInput, pumpState() == PumpRunning);
+    in->setActive(ClampOpenInput, actuatorAt(clamp(), false));
+    in->setActive(ClampClosedInput, actuatorAt(clamp(), true));
+    in->setActive(MandrelBackInput, actuatorAt(mandrel(), false));
+    in->setActive(MandrelForwardInput, actuatorAt(mandrel(), true));
+    in->setActive(ColletOpenInput, actuatorAt(collet(), false));
+    in->setActive(ColletClosedInput, actuatorAt(collet(), true));
+    for (int i = 0; i < 4; ++i) {
+        const SimAxis &sim = m_axes[i];
+        const double distance = std::abs(sim.axis->position() - sim.params.homePosition);
+        in->setActive(QLatin1String(HomeSensorInputs[i]), distance <= SimParameters::HomeSensorWindow);
+    }
+
+    // Çıkışlar: makinenin verdiği komutlar.
+    IoList *out = outputs();
+    out->setActive(PumpOutput, m_pumpCommand);
+    out->setActive(ClampOutput, clamp()->command());
+    out->setActive(MandrelOutput, mandrel()->command());
+    out->setActive(ColletOutput, collet()->command());
+
+    // Çıkış testinin kilitleri: çıkış şu an elle sürülebilir mi?
+    out->setLock(PumpOutput, outputLock(nullptr)); // pompanın silindiri yok
+    out->setLock(ClampOutput, outputLock(clamp()));
+    out->setLock(MandrelOutput, outputLock(mandrel()));
+    out->setLock(ColletOutput, outputLock(collet()));
+}
+
+QString SimMachine::outputLock(const Actuator *valve) const
+{
+    // Döngü sürerken (operatörü beklerken de) çıkışları makine sürer.
+    if (cycleState() != CycleStopped)
+        return tr("Döngü sürüyor (önce STOP)");
+    if (!valve)
+        return {};
+
+    // Döngü dururken de makinenin kilitleri geçerlidir: valf, silindirin elle kumandasıyla
+    // aynı kilitlere uyar (updateInterlocks). IO TEST kuralları atlatmanın yolu değildir:
+    // basınç yokken verilen bir valf komutu, pompa çalışınca silindiri beklenmedik bir anda
+    // hareket ettirirdi.
+    switch (valve->interlock()) {
+    case Actuator::PumpOff:
+        return tr("Basınç yok");
+    case Actuator::AxesMoving:
+        return tr("Eksenler hareketli");
+    case Actuator::CycleRunning: // döngü yukarıda
+    case Actuator::NoInterlock:
+        break;
+    }
+    return {};
+}
+
+// ---------------------------------------------------------------------------
 // Komutlar
 // ---------------------------------------------------------------------------
 
@@ -396,6 +500,34 @@ void SimMachine::setActuator(Actuator *actuator, bool on)
     updateInterlocks();
 }
 
+bool SimMachine::setOutput(const QString &address, bool on)
+{
+    // Makinenin kendi denetimi: ekranın butonu kapatmış olmasına güvenilmez.
+    updateInterlocks();
+    updateIo();
+    if (outputs()->indexOf(address) < 0 || !outputs()->lock(address).isEmpty())
+        return false;
+
+    // Çıkışı sürmek, makinenin o çıkışa bağlı komutunu vermektir (HAREKET'teki butonlarla
+    // aynı komut): pompada START ya da STOP, valfte silindirin komutu.
+    if (address == PumpOutput) {
+        if (on)
+            startPump();
+        else
+            stopPump();
+    } else if (address == ClampOutput) {
+        setActuator(clamp(), on);
+    } else if (address == MandrelOutput) {
+        setActuator(mandrel(), on);
+    } else if (address == ColletOutput) {
+        setActuator(collet(), on);
+    }
+
+    updateInterlocks();
+    updateIo();
+    return outputs()->isActive(address) == on;
+}
+
 void SimMachine::startCycle(const QVariantList &recipe, double dieRadius, double tubeDiameter)
 {
     // Makinenin kendi denetimi: ekran engellemiş olsa da makine yine bakar.
@@ -514,6 +646,7 @@ void SimMachine::tick()
 
     updateCycle(dt);
     updateInterlocks();
+    updateIo(); // IO TEST: turun sonunda girişlerin ve çıkışların görüntüsü
 }
 
 void SimMachine::updatePump(double dt)

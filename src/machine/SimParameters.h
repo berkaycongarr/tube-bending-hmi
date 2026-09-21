@@ -61,4 +61,8 @@ inline constexpr double ClampTravelSeconds = 0.8;   // mengene kapanma / açılm
 inline constexpr double MandrelTravelSeconds = 1.0; // malafa ileri / geri gitme süresi
 inline constexpr double ColletTravelSeconds = 0.5;  // pens kapanma / açılma süresi
 
+// Sensörler (IO TEST'te görünür). Referans sensörü eksenin üzerindeki bir çıkıntıyı (kam)
+// görür: eksen referans noktasının bu kadar yakınındayken 1 olur (mm ya da derece).
+inline constexpr double HomeSensorWindow = 1.0;
+
 } // namespace SimParameters

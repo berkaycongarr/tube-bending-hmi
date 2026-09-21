@@ -152,6 +152,7 @@ T.Popup {
         }
 
         Text {
+            objectName: "keypadNote"
             visible: pad.note.length > 0
             text: pad.note
             font.pixelSize: Theme.fontSmall

@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Layouts
 
-// Ayar kilidi şeridi: makinenin ayarlarını değiştirmek için ayarcı şifresi.
-// ZAMANLAR (ileride AYARLAR) sayfasının üstünde durur; kilidin durumunu ve kalan
-// süreyi gösterir, KİLİDİ AÇ / KİLİTLE butonu vardır.
+// Ayar kilidi şeridi: makinenin ayarlarını değiştirmek (ya da IO TEST'te çıkış sürmek)
+// için ayarcı şifresi. AYARLAR, ZAMANLAR ve IO TEST sayfalarının üstünde durur; kilidin
+// durumunu ve kalan süreyi gösterir, KİLİDİ AÇ / KİLİTLE butonu vardır.
 //
 // Sayfa bir değeri değiştirmek istediğinde request("iş") çağırır: kilit açıksa
 // granted("iş") hemen gelir; kapalıysa önce şifre sorulur, doğruysa granted gelir.
@@ -15,6 +15,10 @@ Rectangle {
 
     // Şifre doğru girilince yapılacak iş (sayfanın verdiği ad)
     property string pendingTag: ""
+
+    // Şifrenin ne için sorulduğu: kilitliyken şeritte ve şifre sorulurken yazar (sayfaya göre).
+    property string lockedText: qsTr("Kilitli · değerleri değiştirmek için ayarcı şifresi gerekir")
+    property string pinNote: qsTr("Makinenin ayarlarını değiştirmek için şifreyi girin.")
 
     signal granted(string tag)
 
@@ -52,7 +56,7 @@ Rectangle {
             Layout.fillWidth: true
             text: bar.access.unlocked
                   ? qsTr("Ayar açık · %1 sonra kendiliğinden kilitlenir").arg(bar.clock(bar.access.remainingSeconds))
-                  : qsTr("Kilitli · değerleri değiştirmek için ayarcı şifresi gerekir")
+                  : bar.lockedText
             font.pixelSize: 15
             font.bold: true
             color: bar.access.unlocked ? Theme.ok : Theme.textMuted
@@ -82,7 +86,7 @@ Rectangle {
 
         secret: true
         title: qsTr("Ayarcı şifresi")
-        note: qsTr("Makinenin ayarlarını değiştirmek için şifreyi girin.")
+        note: bar.pinNote
         secretMinimum: bar.access.minimumPinLength
         secretMaximum: bar.access.maximumPinLength
         onSecretEntered: text => {

@@ -7,7 +7,8 @@
 
 class QSettings;
 
-// Ayarcı şifresi: makinenin ayarlarını (ZAMANLAR, ileride AYARLAR) değiştirmek için.
+// Ayarcı şifresi: makinenin ayarlarını (AYARLAR, ZAMANLAR) değiştirmek ve IO TEST'te
+// çıkış sürmek için.
 //
 // Değerleri herkes görür; değiştirmek için ayarcı şifresi girilir. Sanayi ekranlarında
 // bu yetki seviyesidir: operatör üretir, ayarcı makineyi ayarlar. Böylece operatör

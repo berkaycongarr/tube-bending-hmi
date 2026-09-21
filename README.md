@@ -170,14 +170,49 @@ döngü sürerken değiştirilirse sıradaki aşamada kullanılır. Varsayıland
 sürenin "Varsayılan" yazısı turuncudur; ↺ varsayılana döndürür. Dosyada sayı olmayan ya
 da aralık dışında bir değer varsa yok sayılır, varsayılan kullanılır.
 
-Değerleri herkes görür; değiştirmek için **ayarcı şifresi** gerekir (sanayi ekranlarındaki
-yetki seviyesi: operatör üretir, ayarcı makineyi ayarlar). **Varsayılan şifre: `1234`.**
-Kilit açılınca 10 dakika açık kalır, her değişiklikte süre baştan başlar; süre dolunca
-kendiliğinden kilitlenir. Kilit açıkken ekranın altında "AYAR AÇIK" yazar; ona ya da
-KİLİTLE'ye dokununca hemen kilitlenir. Uygulama her açılışta kilitli başlar. Şifre
+Değerleri herkes görür; değiştirmek için (IO TEST'te çıkış sürmek için de) **ayarcı şifresi**
+gerekir (sanayi ekranlarındaki yetki seviyesi: operatör üretir, ayarcı makineyi ayarlar).
+**Varsayılan şifre: `1234`.** Kilit açılınca 10 dakika açık kalır, her değişiklikte süre baştan
+başlar; süre dolunca kendiliğinden kilitlenir. Kilit açıkken ekranın altında "AYAR AÇIK" yazar;
+ona ya da KİLİTLE'ye dokununca hemen kilitlenir. Uygulama her açılışta kilitli başlar. Şifre
 AYARLAR sayfasından değiştirilir. Şifrenin kendisi hiçbir yerde saklanmaz; yalnızca özeti
 (SHA-256) `ayarlar.ini` içinde durur. Şifre unutulursa `ayarlar.ini` dosyasından
 `ayarciSifreOzeti` satırı silinir: varsayılan şifre (`1234`) geri gelir.
+
+## IO TEST
+
+**IO TEST** sayfası makinenin girişlerini ve çıkışlarını canlı gösterir (bakım ve devreye alma
+için). Girişler sensörler ve şalterlerdir; çıkışlar pompa motoru ve valflerdir. Lamba doluysa
+(yeşil, **1**) sinyal var, içi boşsa (**0**) yok. Silindirlerin iki ucunda birer sensör vardır:
+silindir yoldayken ikisi de 0'dır. Referans sensörü, eksen referans noktasındayken 1 olur.
+
+| Adres | Giriş | 1 olduğunda |
+|---|---|---|
+| I0.0 | Basınç şalteri | Basınç çalışma basıncında (120 bar) |
+| I0.1 / I0.2 | Mengene açık / kapalı | Mengene o uçta |
+| I0.3 / I0.4 | Malafa geride / ileride | Malafa o uçta |
+| I0.5 / I0.6 | Pens açık / kapalı | Pens o uçta |
+| I1.0 – I1.3 | X, B, A, Y referans sensörü | Eksen referans noktasında |
+
+| Adres | Çıkış | 1 olduğunda |
+|---|---|---|
+| Q0.0 | Pompa motoru | Pompa çalışır, basınç oluşur |
+| Q0.1 | Mengene kapat valfi | Mengene kapanır (0: açılır) |
+| Q0.2 | Malafa ileri valfi | Malafa ileri gider (0: geri gelir) |
+| Q0.3 | Pens kapat valfi | Pens kapanır (0: açılır) |
+
+Çıkışlar **AKTİF ET** / **PASİF ET** ile sürülür. Çıkış sürmek, makinenin o çıkışa bağlı komutunu
+vermektir (HAREKET'teki butonlarla aynı komut): ayarcı şifresi gerekir, yalnızca döngü dururken
+olur ve makinenin kilitleri burada da geçerlidir (basınç yokken valf sürülmez, eksenler hareket
+ederken mengene sürülmez). Çıkış neden sürülemiyorsa satırında yazar. IO TEST kuralları
+atlatmanın yolu değildir: basınç yokken verilen bir valf komutu, pompa çalışınca silindiri
+beklenmedik bir anda hareket ettirirdi. Şifre bu sayfada da istenir, çünkü gerçek makinede
+buradan operatörün butonu olmayan çıkışlar da (ör. yağlama, ikaz lambası) sürülebilir.
+
+Adresler **örnektir** (Siemens biçiminde: I giriş, Q çıkış, bayt.bit). Gerçek makinenin giriş ve
+çıkış listesi, adresleri ve valf tipi (tek ya da çift bobinli) elektrik şemasından alınacak;
+demoda müşteriye sorulacak. Liste `SimMachine.cpp`'de (`defineIo`) tanımlıdır; ekran listeyi
+makineden okur, nokta eklemek için ekran kodu değişmez.
 
 ## Parçanın şekli ve SİMÜLASYON
 
@@ -223,6 +258,7 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `src/program/PartShape.*` | Parçanın şekli: programdan borunun eksen çizgisini (3B) hesaplar |
 | `src/tooling/DieLibrary.*` | Kalıp kütüphanesi: kalıplar, takılı kalıp, `kaliplar.json` biçimi |
 | `src/machine/ParameterList.*` | Makinenin ayarlanabilir değerleri (süreler, ayarlar): başlık, birim, varsayılan, aralık, kilit |
+| `src/machine/IoList.*` | Makinenin girişleri ya da çıkışları (IO TEST): adres, ad, durum (1/0), çıkışın kilidi |
 | `src/access/AccessControl.*` | Ayarcı şifresi: kilidi açma, kendiliğinden kilitlenme, şifre değiştirme ve özeti |
 | `qml/Main.qml` | Ana çerçeve: üst şerit (durum, eksenler, BAŞLAT/STOP), sol menü, sayfalar |
 | `qml/ProductionPage.qml` | Üretim sayfası: açık program, LİSTE / SİMÜLASYON, takılı kalıp, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |
@@ -239,7 +275,8 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `qml/MotionPage.qml` | Hareket sayfası: jog, hedef konuma gitme ve hidrolik |
 | `qml/SettingsPage.qml` | Ayarlar sayfası: eksen limitleri ve hızları, boru alma konumu, şifre değiştirme |
 | `qml/TimersPage.qml` | Zamanlar sayfası: makinenin süreleri, varsayılana dönme |
-| `qml/LockBar.qml` | Ayar kilidi şeridi ve şifre sorma (ayar sayfaları için) |
+| `qml/IoTestPage.qml` | IO Test sayfası: girişler ve çıkışlar canlı, çıkış sürme |
+| `qml/LockBar.qml` | Ayar kilidi şeridi ve şifre sorma (AYARLAR, ZAMANLAR, IO TEST) |
 | `qml/Theme.qml` | Renkler ve ölçüler |
 | `qml/HmiButton.qml` | Dokunmatik buton |
 | `qml/JogButton.qml` | Push buton mantığıyla jog butonu |

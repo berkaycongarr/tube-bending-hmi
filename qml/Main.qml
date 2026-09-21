@@ -22,7 +22,7 @@ Window {
     required property AccessControl access
 
     // Seçili sayfa: 0 = Üretim, 1 = Tasarım, 2 = Kalıplar, 3 = Hareket, 4 = Ayarlar,
-    // 5 = Zamanlar (sıra müşterinin ekranındaki menüyle aynı; IO TEST sırada)
+    // 5 = Zamanlar, 6 = IO Test (sıra müşterinin ekranındaki menüyle aynı)
     property int currentPage: 0
 
     // Kapanış onaylandı mı? Kaydedilmemiş değişiklik varsa pencere hemen kapanmaz,
@@ -307,6 +307,14 @@ Window {
                         onClicked: root.currentPage = 5
                     }
 
+                    NavButton {
+                        objectName: "navIo"
+                        Layout.fillWidth: true
+                        text: qsTr("IO TEST")
+                        selected: root.currentPage === 6
+                        onClicked: root.currentPage = 6
+                    }
+
                     Item {
                         Layout.fillHeight: true
                     }
@@ -349,6 +357,11 @@ Window {
                 }
 
                 TimersPage {
+                    machine: root.machine
+                    access: root.access
+                }
+
+                IoTestPage {
                     machine: root.machine
                     access: root.access
                 }
