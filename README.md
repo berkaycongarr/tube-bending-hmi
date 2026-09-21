@@ -52,6 +52,23 @@ uygulama kapatılırsa önce sorulur.
 
 Makinenin ürettiği toplam adet de `ayarlar.ini` içinde tutulur: uygulama kapanınca sıfırlanmaz.
 
+## Kalıplar
+
+Makinede kullanılabilen büküm kalıpları **KALIPLAR** sayfasında tutulur. Her kalıbın
+açıklaması (ör. `25X50XR116`), kalıp yarıçapı (boru ekseninde), aldığı boru çapı ve iki
+ayarı vardır: **MALAFALI BÜK** ve **BÜKÜMDE İLERLE** (müşterinin ekranındaki "AKTİF KALIP"
+bilgileri). İlk açılışta müşterinin ekranındaki kalıp örnek olarak eklenir.
+
+Kalıplar tek bir dosyada, `Belgeler\BoruBukme\kaliplar.json` içinde saklanır ve her
+değişiklik hemen, güvenli biçimde (`QSaveFile`) yazılır; dosyaya yazılamazsa liste de
+değişmez. Dosya bozuksa üzerine yazılmaz: `kaliplar.json.bozuk` adıyla yedeklenir ve
+liste boş başlar.
+
+**Takılı kalıp**, makinede o an duran fiziksel kalıptır. Listeden seçilip TAKILI KALIP YAP
+ile (onay sorularak) işaretlenir ve `ayarlar.ini` içinde hatırlanır; kalıp listesi başka
+makineye kopyalansa da "takılı" bilgisi taşınmaz. Takılı kalıp silinemez; döngü sürerken
+takılı kalıp değiştirilemez.
+
 ## Üretim döngüsü
 
 Parçanın adımlarını **makine** yürütür; ekran yalnızca tarifi (program adımlarını) gönderir,
@@ -86,9 +103,11 @@ Döngü şu durumlarda başlamaz: makine referanssız, pompa durmuş, mengene ka
 beklenirken pens açık. Döngü sırasında elle kumanda (jog, konuma git, silindirler, referans
 arama) kilitlidir ve butonlar nedenini yazar. Eksenler, döngü operatörü beklerken de kilitli
 kalır: araba oynatılırsa döngü kaldığı yerden yanlış devam eder. Silindirler ise beklerken
-serbesttir, çünkü boruyu takmak için pens gerekir. STOP döngüyü keser. Basınç kesilirse ya da bir aşama beklenen sürede
-bitmezse döngü arızayla durur; silindirler olduğu gibi kalır — yarıda kalan bir parçada
-mengenenin kendiliğinden açılması tehlikelidir, kararı operatör verir.
+serbesttir, çünkü boruyu takmak için pens gerekir. STOP döngüyü keser.
+
+Basınç kesilirse ya da bir aşama beklenen sürede bitmezse döngü arızayla durur; silindirler
+olduğu gibi kalır — yarıda kalan bir parçada mengenenin kendiliğinden açılması tehlikelidir,
+kararı operatör verir.
 
 Varsayımlar (demoda müşteriye sorulacak): boru alma konumu, büküm sırasında ilerleme,
 malafalı büküm, adım arası duraklama ve zaman aşımı süreleri, BÜK ile ROTASYON değerlerinin
@@ -106,10 +125,13 @@ mutlak olması. Hepsi `src/machine/SimParameters.h` içindedir.
 | `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, süreler |
 | `src/program/BendProgram.*` | Büküm programı (reçete): komut listesi, açınım boyu, doğrulama, JSON biçimi |
 | `src/program/ProgramStore.*` | Program deposu: klasördeki dosyalar, aç / kaydet / sil |
+| `src/tooling/DieLibrary.*` | Kalıp kütüphanesi: kalıplar, takılı kalıp, `kaliplar.json` biçimi |
 | `qml/Main.qml` | Ana çerçeve: üst şerit (durum, eksenler, BAŞLAT/STOP), sol menü, sayfalar |
 | `qml/ProductionPage.qml` | Üretim sayfası: açık program, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |
 | `qml/DesignPage.qml` | Tasarım sayfası: program tablosu, boru ve kalıp, açınım boyu |
 | `qml/ProgramTable.qml` | Program tablosu (TASARIM'da düzenlenir, ÜRETİM'de işlenen adımı vurgular) |
+| `qml/DiesPage.qml` | Kalıplar sayfası: kalıp listesi, takılı kalıp, YENİ / DÜZENLE / SİL / TAKILI KALIP YAP |
+| `qml/DieDialog.qml` | Kalıp ekleme ve düzenleme penceresi |
 | `qml/ProgramManager.qml` | Program dosya işlemlerinin akışı ve soruları |
 | `qml/ProgramsDialog.qml` | Programlar penceresi: liste, AÇ / YENİ / FARKLI KAYDET / SİL |
 | `qml/NameDialog.qml` | Program adı girme penceresi |

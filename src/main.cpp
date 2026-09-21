@@ -6,6 +6,7 @@
 #include "machine/SimMachine.h"
 #include "program/BendProgram.h"
 #include "program/ProgramStore.h"
+#include "tooling/DieLibrary.h"
 
 int main(int argc, char *argv[])
 {
@@ -54,6 +55,27 @@ int main(int argc, char *argv[])
         settings.setValue(QStringLiteral("toplamAdet"), machine.totalCount());
     });
 
+    // Kalıp kütüphanesi: makinede kullanılabilen kalıplar tek bir dosyada. Dosya yoksa
+    // örnek kalıpla (müşterinin ekranındaki 25X50XR116) oluşturulur.
+    DieLibrary dies(dataFolder + QStringLiteral("/kaliplar.json"));
+
+    // Takılı kalıp bu makinenin durumudur: ayarlarda hatırlanır. İlk açılışta listedeki
+    // ilk kalıp takılı sayılır. Hatırlanan kalıp listede artık yoksa takılı kalıp
+    // seçilmemiş olur: operatör makinedeki kalıbı listeden kendisi işaretler.
+    const QString savedDie = settings.value(QStringLiteral("takiliKalip")).toString();
+    if (savedDie.isEmpty()) {
+        if (dies.count() > 0)
+            dies.setActive(0);
+    } else {
+        dies.setActiveName(savedDie);
+    }
+    auto rememberDie = [&settings, &dies] {
+        if (dies.hasActive())
+            settings.setValue(QStringLiteral("takiliKalip"), dies.activeName());
+    };
+    rememberDie();
+    QObject::connect(&dies, &DieLibrary::activeChanged, &settings, rememberDie);
+
     // Çalışma modu da hatırlanır: operatör her açılışta yeniden seçmesin.
     if (settings.value(QStringLiteral("yariOtomatik"), false).toBool())
         machine.setCycleMode(IMachine::SemiAutomaticCycle);
@@ -70,6 +92,7 @@ int main(int argc, char *argv[])
         { QStringLiteral("machine"), QVariant::fromValue<IMachine *>(&machine) },
         { QStringLiteral("program"), QVariant::fromValue(&program) },
         { QStringLiteral("store"), QVariant::fromValue(&store) },
+        { QStringLiteral("dies"), QVariant::fromValue(&dies) },
     });
 
     // QML dosyası yüklenemezse (yazım hatası vb.) programı kapat.

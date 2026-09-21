@@ -45,6 +45,8 @@ qt_add_qml_module(appBoruHmi
         qml/NameDialog.qml
         qml/ProgramsDialog.qml
         qml/ProgramManager.qml
+        qml/DiesPage.qml
+        qml/DieDialog.qml
     SOURCES
         src/machine/Actuator.h
         src/machine/Axis.h
@@ -56,11 +58,13 @@ qt_add_qml_module(appBoruHmi
         src/program/BendProgram.cpp
         src/program/ProgramStore.h
         src/program/ProgramStore.cpp
+        src/tooling/DieLibrary.h
+        src/tooling/DieLibrary.cpp
 )
 
 # Qt'nin ürettiği kayıt kodu başlık dosyalarını yalnızca adıyla çağırır
 # (#include <Axis.h>). Bu yüzden klasörleri arama yoluna ekliyoruz.
-target_include_directories(appBoruHmi PRIVATE src/machine src/program)
+target_include_directories(appBoruHmi PRIVATE src/machine src/program src/tooling)
 
 # Windows'ta programın arkasında siyah konsol penceresi açılmasın.
 set_target_properties(appBoruHmi PROPERTIES

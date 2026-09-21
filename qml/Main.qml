@@ -15,7 +15,11 @@ Window {
     // main.cpp tarafından verilen program deposu (Belgeler\BoruBukme\Programlar).
     required property ProgramStore store
 
-    // Seçili sayfa: 0 = Üretim, 1 = Tasarım, 2 = Hareket
+    // main.cpp tarafından verilen kalıp kütüphanesi (Belgeler\BoruBukme\kaliplar.json).
+    required property DieLibrary dies
+
+    // Seçili sayfa: 0 = Üretim, 1 = Tasarım, 2 = Kalıplar, 3 = Hareket
+    // (sıra müşterinin ekranındaki menüyle aynı)
     property int currentPage: 0
 
     // Kapanış onaylandı mı? Kaydedilmemiş değişiklik varsa pencere hemen kapanmaz,
@@ -245,11 +249,19 @@ Window {
                     }
 
                     NavButton {
+                        objectName: "navDies"
+                        Layout.fillWidth: true
+                        text: qsTr("KALIPLAR")
+                        selected: root.currentPage === 2
+                        onClicked: root.currentPage = 2
+                    }
+
+                    NavButton {
                         objectName: "navMotion"
                         Layout.fillWidth: true
                         text: qsTr("HAREKET")
-                        selected: root.currentPage === 2
-                        onClicked: root.currentPage = 2
+                        selected: root.currentPage === 3
+                        onClicked: root.currentPage = 3
                     }
 
                     Item {
@@ -272,6 +284,11 @@ Window {
                 DesignPage {
                     program: root.program
                     manager: programManager
+                }
+
+                DiesPage {
+                    dies: root.dies
+                    machine: root.machine
                 }
 
                 MotionPage {
