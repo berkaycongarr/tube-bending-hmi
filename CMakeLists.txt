@@ -53,6 +53,7 @@ qt_add_qml_module(appBoruHmi
         qml/TimersPage.qml
         qml/SettingsPage.qml
         qml/IoTestPage.qml
+        qml/AlarmsDialog.qml
     SOURCES
         src/machine/Actuator.h
         src/machine/Axis.h
@@ -61,6 +62,8 @@ qt_add_qml_module(appBoruHmi
         src/machine/ParameterList.cpp
         src/machine/IoList.h
         src/machine/IoList.cpp
+        src/machine/AlarmList.h
+        src/machine/AlarmList.cpp
         src/machine/SimParameters.h
         src/machine/SimMachine.h
         src/machine/SimMachine.cpp

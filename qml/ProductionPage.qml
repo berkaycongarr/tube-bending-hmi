@@ -55,6 +55,9 @@ Rectangle {
         case Machine.BlockNoTooling:
             // Kalıp listesinde takılı kalıp yoksa bu zaten aşağıda yazıyor.
             return page.toolingProblem.length > 0 ? "" : qsTr("takılı kalıp makineye bildirilmemiş")
+        case Machine.BlockAlarm:
+            // Arızanın kendisi üstteki kırmızı şeritte yazıyor; burada ne yapılacağı yazar.
+            return qsTr("arıza var → RESET")
         default:
             return ""
         }
@@ -73,24 +76,9 @@ Rectangle {
 
     readonly property bool ready: page.blockReason.length === 0
 
-    readonly property string faultText: {
-        switch (page.machine.cycleFault) {
-        case Machine.FaultTimeout:
-            return qsTr("adım beklenen sürede bitmedi")
-        case Machine.FaultLimit:
-            return qsTr("program eksen limitlerine sığmıyor")
-        case Machine.FaultRecipe:
-            return qsTr("program boş ya da hatalı")
-        case Machine.FaultPressure:
-            return qsTr("hidrolik basınç kesildi")
-        case Machine.FaultTooling:
-            return qsTr("program takılı kalıba uymuyor")
-        default:
-            return ""
-        }
-    }
-
     // Şeritte yazan ana bilgi: makine ne yapıyor, operatörden ne bekliyor?
+    // Arıza burada yazmaz: arızanın yeri üst şeritteki kırmızı alarm satırıdır (her
+    // sayfada görünür). Burada yalnızca "üretime hazır değil: arıza var → RESET" çıkar.
     readonly property string cycleText: {
         if (page.machine.cycleState === Machine.CycleRunning)
             return qsTr("Üretim sürüyor")
@@ -104,8 +92,6 @@ Rectangle {
                 return qsTr("Parça bitti · parçayı alın, yeni boru takıp BAŞLAT'a basın")
             }
         }
-        if (page.faultText.length > 0)
-            return qsTr("ARIZA: %1").arg(page.faultText)
         return page.ready ? qsTr("✓ Üretime hazır · BAŞLAT'a basın")
                           : qsTr("Üretime hazır değil: %1").arg(page.blockReason)
     }
@@ -115,7 +101,7 @@ Rectangle {
     readonly property string statusKind: {
         if (page.machine.cycleState !== Machine.CycleStopped)
             return "busy"
-        if (page.faultText.length > 0 || page.programProblems.length > 0
+        if (page.machine.hasAlarm || page.programProblems.length > 0
             || page.toolingProblem.length > 0)
             return "fault"
         return page.ready ? "ready" : "busy"

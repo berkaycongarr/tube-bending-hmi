@@ -76,12 +76,16 @@ T.Button {
             color: control.isOn ? "white" : control.inMotion ? Theme.activeText : Theme.text
         }
 
+        // Dar butonda (ÜRETİM alt şeridi) kilit yazısı kesilmesin: önce küçülür.
         Text {
             width: parent.width
             text: control.lockText
             visible: control.locked
             font.pixelSize: 13
             font.bold: true
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: 10
+            horizontalAlignment: Text.AlignLeft
             color: control.isOn ? "#ffcf8a" : Theme.activeText
             elide: Text.ElideRight
         }

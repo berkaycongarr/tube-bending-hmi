@@ -51,7 +51,22 @@ Window {
                                      : machine.axisX.homing ? machine.axisX
                                      : null
 
+    // Üst şeritteki durum kutusu her sayfada görünür: makinenin o an ne yaptığını söyler.
+    // Sırayla: üretim sürüyor mu, operatör mü bekleniyor, referans mı aranıyor, hazır mı?
+    // (Arıza varken bu kutunun yerini kırmızı arıza şeridi alır: arızanın yeri orasıdır.)
     readonly property string stateText: {
+        if (machine.cycleState === Machine.CycleRunning)
+            return qsTr("ÜRETİMDE")
+        if (machine.cycleState === Machine.CycleWaiting) {
+            switch (machine.waitReason) {
+            case Machine.WaitTube:
+                return qsTr("BORU BEKLENİYOR")
+            case Machine.WaitStep:
+                return qsTr("ADIM BEKLENİYOR")
+            default:
+                return qsTr("PARÇA BİTTİ")
+            }
+        }
         switch (machine.state) {
         case Machine.Homing:
             return qsTr("REFERANS ARANIYOR")
@@ -63,6 +78,21 @@ Window {
     }
 
     readonly property string stateHint: {
+        if (machine.cycleState === Machine.CycleRunning) {
+            return machine.currentStep >= 0 && machine.stepCount > 0
+                   ? qsTr("Adım %1/%2").arg(machine.currentStep + 1).arg(machine.stepCount)
+                   : qsTr("Parça başlıyor")
+        }
+        if (machine.cycleState === Machine.CycleWaiting) {
+            switch (machine.waitReason) {
+            case Machine.WaitTube:
+                return qsTr("Boruyu takın, pensi kapatın, BAŞLAT")
+            case Machine.WaitStep:
+                return qsTr("Sıradaki adım için BAŞLAT")
+            default:
+                return qsTr("Parçayı alın, yeni boru takın")
+            }
+        }
         switch (machine.state) {
         case Machine.Homing:
             return homingAxis ? qsTr("%1 ekseni referans noktasına gidiyor").arg(homingAxis.name) : ""
@@ -74,6 +104,10 @@ Window {
     }
 
     readonly property color stateColor: {
+        if (machine.cycleState === Machine.CycleRunning)
+            return Theme.ok
+        if (machine.cycleState === Machine.CycleWaiting)
+            return Theme.active
         switch (machine.state) {
         case Machine.Homing:
             return Theme.active
@@ -125,118 +159,213 @@ Window {
         // Dar ekranda (1024 px) kutular daralır: eksenler 172'den 127 px'e (konum
         // yazısı da sığana kadar küçülür), butonlar 124'ten 106 px'e; durum
         // kutusu en az 210 px kalır ki "REFERANS ARANIYOR" kesilmesin.
-        RowLayout {
+        Item {
             Layout.fillWidth: true
-            spacing: 8
+            Layout.preferredHeight: 72
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.minimumWidth: 210
-                Layout.preferredHeight: 72
-                radius: Theme.radius
-                color: Theme.panel
-                border.color: Theme.panelBorder
+            RowLayout {
+                id: topStrip
 
-                // Soldaki renkli şerit makinenin durumunu gösterir.
+                anchors.fill: parent
+                spacing: 8
+
                 Rectangle {
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: 8
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 210
+                    Layout.preferredHeight: 72
                     radius: Theme.radius
-                    color: root.stateColor
-                }
+                    color: Theme.panel
+                    border.color: Theme.panelBorder
 
-                Column {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 24
-                    anchors.right: parent.right
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 2
-
-                    // Uzun durum yazısı dar alanda önce küçülür, yine sığmazsa kısaltılır.
-                    Text {
-                        objectName: "stateText"
-                        width: parent.width
-                        text: root.stateText
-                        font.pixelSize: Theme.fontTitle
-                        font.bold: true
-                        fontSizeMode: Text.HorizontalFit
-                        minimumPixelSize: 14
-                        color: Theme.text
-                        elide: Text.ElideRight
+                    // Soldaki renkli şerit makinenin durumunu gösterir.
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: 8
+                        radius: Theme.radius
+                        color: root.stateColor
                     }
 
-                    Text {
-                        width: parent.width
-                        text: root.stateHint
-                        font.pixelSize: Theme.fontSmall
-                        color: Theme.textMuted
-                        elide: Text.ElideRight
+                    Column {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 24
+                        anchors.right: parent.right
+                        anchors.rightMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
+
+                        // Uzun durum yazısı dar alanda önce küçülür, yine sığmazsa kısaltılır.
+                        Text {
+                            objectName: "stateText"
+                            width: parent.width
+                            text: root.stateText
+                            font.pixelSize: Theme.fontTitle
+                            font.bold: true
+                            fontSizeMode: Text.HorizontalFit
+                            minimumPixelSize: 14
+                            color: Theme.text
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            objectName: "stateHint"
+                            width: parent.width
+                            text: root.stateHint
+                            font.pixelSize: Theme.fontSmall
+                            color: Theme.textMuted
+                            elide: Text.ElideRight
+                        }
                     }
+                }
+
+                AxisDisplay {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 127
+                    Layout.maximumWidth: 172
+                    axis: root.machine.axisX
+                    title: qsTr("İlerletme")
+                }
+
+                AxisDisplay {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 127
+                    Layout.maximumWidth: 172
+                    axis: root.machine.axisB
+                    title: qsTr("Büküm")
+                }
+
+                AxisDisplay {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 127
+                    Layout.maximumWidth: 172
+                    axis: root.machine.axisA
+                    title: qsTr("Rotasyon")
+                }
+
+                AxisDisplay {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 127
+                    Layout.maximumWidth: 172
+                    axis: root.machine.axisY
+                    title: qsTr("Öteleme")
+                }
+
+                // Üretim döngüsünü başlatır ya da bekleyen döngüye devam ettirir.
+                // Tarifi ekran gönderir, adımları makine yürütür.
+                HmiButton {
+                    id: startButton
+
+                    objectName: "startButton"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 106
+                    Layout.maximumWidth: 124
+                    Layout.preferredHeight: 72
+                    font.pixelSize: 15
+                    text: root.resuming ? qsTr("▶ DEVAM") : qsTr("▶ BAŞLAT")
+                    accent: Theme.ok
+                    filled: true
+                    enabled: root.canStart
+                    onClicked: root.machine.startCycle(root.program.recipe(), root.program.dieRadius,
+                                                       root.program.tubeDiameter)
+                }
+
+                HmiButton {
+                    id: stopButton
+
+                    objectName: "stopButton"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 106
+                    Layout.maximumWidth: 124
+                    Layout.preferredHeight: 72
+                    text: qsTr("STOP")
+                    accent: Theme.danger
+                    filled: true
+                    onClicked: root.machine.stop()
                 }
             }
 
-            AxisDisplay {
-                Layout.fillWidth: true
-                Layout.minimumWidth: 127
-                Layout.maximumWidth: 172
-                axis: root.machine.axisX
-                title: qsTr("İlerletme")
-            }
+            // Arıza şeridi: yalnızca silinmemiş arıza varken görünür ve her sayfada durur
+            // (operatör hangi sayfada olursa olsun arızayı görmeli). Üst şeridin üstüne
+            // biner: sayfalardan yer almadığı için hiçbir sayfanın yerleşimi bozulmaz.
+            // Arıza varken eksen konumlarının yerini arıza alır; konumlar HAREKET
+            // sayfasında da durur. BAŞLAT ve STOP açıkta kalır.
+            // RESET sebebi geçmiş arızaları siler; sebebi süren arıza (ör. acil stop
+            // basılı) silinmez, buton kapalı kalır.
+            Rectangle {
+                objectName: "alarmBanner"
+                visible: root.machine.hasAlarm
+                anchors.left: parent.left
+                anchors.right: parent.right
+                // BAŞLAT ve STOP açıkta kalsın: şerit onların soluna kadar uzanır.
+                anchors.rightMargin: startButton.width + stopButton.width + topStrip.spacing * 2
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                radius: Theme.radius
+                color: "#f9e6e6" // üst şeridin üstünü kapatır: saydam olmamalı
+                border.color: Theme.danger
+                border.width: 2
 
-            AxisDisplay {
-                Layout.fillWidth: true
-                Layout.minimumWidth: 127
-                Layout.maximumWidth: 172
-                axis: root.machine.axisB
-                title: qsTr("Büküm")
-            }
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14
+                    anchors.rightMargin: 8
+                    spacing: 10
 
-            AxisDisplay {
-                Layout.fillWidth: true
-                Layout.minimumWidth: 127
-                Layout.maximumWidth: 172
-                axis: root.machine.axisA
-                title: qsTr("Rotasyon")
-            }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
 
-            AxisDisplay {
-                Layout.fillWidth: true
-                Layout.minimumWidth: 127
-                Layout.maximumWidth: 172
-                axis: root.machine.axisY
-                title: qsTr("Öteleme")
-            }
+                        Text {
+                            objectName: "alarmTitle"
+                            Layout.fillWidth: true
+                            text: root.machine.alarmCount > 1
+                                  ? qsTr("ARIZA: %1  ·  +%2 arıza daha").arg(root.machine.alarmTitle)
+                                                                        .arg(root.machine.alarmCount - 1)
+                                  : qsTr("ARIZA: %1").arg(root.machine.alarmTitle)
+                            font.pixelSize: 17
+                            font.bold: true
+                            color: Theme.danger
+                            elide: Text.ElideRight
+                        }
 
-            // Üretim döngüsünü başlatır ya da bekleyen döngüye devam ettirir.
-            // Tarifi ekran gönderir, adımları makine yürütür.
-            HmiButton {
-                objectName: "startButton"
-                Layout.fillWidth: true
-                Layout.minimumWidth: 106
-                Layout.maximumWidth: 124
-                Layout.preferredHeight: 72
-                font.pixelSize: 15
-                text: root.resuming ? qsTr("▶ DEVAM") : qsTr("▶ BAŞLAT")
-                accent: Theme.ok
-                filled: true
-                enabled: root.canStart
-                onClicked: root.machine.startCycle(root.program.recipe(), root.program.dieRadius,
-                                                   root.program.tubeDiameter)
-            }
+                        Text {
+                            objectName: "alarmDetail"
+                            Layout.fillWidth: true
+                            text: root.machine.alarmDetail
+                            font.pixelSize: 13
+                            color: Theme.text
+                            // Ayrıntı uzun olabilir: iki satıra sarar, yine sığmazsa kısalır
+                            // (tamamı her zaman arıza geçmişinde durur).
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                        }
+                    }
 
-            HmiButton {
-                objectName: "stopButton"
-                Layout.fillWidth: true
-                Layout.minimumWidth: 106
-                Layout.maximumWidth: 124
-                Layout.preferredHeight: 72
-                text: qsTr("STOP")
-                accent: Theme.danger
-                filled: true
-                onClicked: root.machine.stop()
+                    HmiButton {
+                        objectName: "alarmHistoryButton"
+                        implicitWidth: 112
+                        implicitHeight: 44
+                        padding: 6
+                        font.pixelSize: 15
+                        text: qsTr("GEÇMİŞ")
+                        onClicked: alarmsDialog.open()
+                    }
+
+                    HmiButton {
+                        objectName: "resetButton"
+                        implicitWidth: 112
+                        implicitHeight: 44
+                        padding: 6
+                        font.pixelSize: 15
+                        text: qsTr("RESET")
+                        accent: Theme.danger
+                        filled: true
+                        enabled: root.machine.canResetAlarms
+                        onClicked: root.machine.resetAlarms()
+                    }
+                }
             }
         }
 
@@ -420,6 +549,18 @@ Window {
                 }
             }
 
+            HmiButton {
+                objectName: "historyButton"
+                implicitWidth: 156
+                implicitHeight: 30
+                padding: 4
+                font.pixelSize: 13
+                text: root.machine.alarms.count > 0 ? qsTr("ARIZA GEÇMİŞİ (%1)").arg(root.machine.alarms.count)
+                                                    : qsTr("ARIZA GEÇMİŞİ")
+                accent: Theme.textMuted
+                onClicked: alarmsDialog.open()
+            }
+
             Item {
                 Layout.fillWidth: true
             }
@@ -439,6 +580,13 @@ Window {
         repeat: true
         triggeredOnStart: true
         onTriggered: clock.text = Qt.formatDateTime(new Date(), "dd.MM.yyyy  HH:mm:ss")
+    }
+
+    // Arıza geçmişi penceresi (arıza şeridinden ve alt şeritten açılır).
+    AlarmsDialog {
+        id: alarmsDialog
+
+        machine: root.machine
     }
 
     // Program dosya işlemleri ve pencereleri (kaydet, aç, programlar listesi).

@@ -7,6 +7,7 @@
 #include <QtQml/qqmlregistration.h>
 
 #include "Actuator.h"
+#include "AlarmList.h"
 #include "Axis.h"
 #include "IoList.h"
 #include "ParameterList.h"
@@ -54,6 +55,12 @@ class IMachine : public QObject
     Q_PROPERTY(ParameterList *settings READ settings CONSTANT)
     Q_PROPERTY(IoList *inputs READ inputs CONSTANT)
     Q_PROPERTY(IoList *outputs READ outputs CONSTANT)
+    Q_PROPERTY(AlarmList *alarms READ alarms CONSTANT)
+    Q_PROPERTY(bool hasAlarm READ hasAlarm NOTIFY alarmsChanged)
+    Q_PROPERTY(QString alarmTitle READ alarmTitle NOTIFY alarmsChanged)
+    Q_PROPERTY(QString alarmDetail READ alarmDetail NOTIFY alarmsChanged)
+    Q_PROPERTY(int alarmCount READ alarmCount NOTIFY alarmsChanged)
+    Q_PROPERTY(bool canResetAlarms READ canResetAlarms NOTIFY alarmsChanged)
 
 public:
     enum State {
@@ -96,7 +103,8 @@ public:
         BlockPumpOff,     // hidrolik pompa çalışmıyor
         BlockClampClosed, // mengene kapalı: önce açılmalı
         BlockColletOpen,  // boru beklenirken pens hâlâ açık
-        BlockNoTooling    // makineye takılı kalıp bildirilmemiş
+        BlockNoTooling,   // makineye takılı kalıp bildirilmemiş
+        BlockAlarm        // silinmemiş arıza var: önce RESET
     };
     Q_ENUM(StartBlock)
 
@@ -129,7 +137,10 @@ public:
         , m_settings(new ParameterList(this))
         , m_inputs(new IoList(this))
         , m_outputs(new IoList(this))
+        , m_alarms(new AlarmList(this))
     {
+        // Arıza listesi değişince ekranın bağlamaları yenilensin.
+        connect(m_alarms, &AlarmList::changed, this, &IMachine::alarmsChanged);
     }
 
     State state() const { return m_state; }
@@ -158,6 +169,31 @@ public:
     // belirler (demoda SimMachine.cpp'de; gerçek makinede elektrik şemasından).
     IoList *inputs() const { return m_inputs; }
     IoList *outputs() const { return m_outputs; }
+
+    // Makinenin arızaları: duranlar ve geçmiş (üst şeritteki alarm ve ARIZA GEÇMİŞİ).
+    AlarmList *alarms() const { return m_alarms; }
+
+    bool hasAlarm() const { return m_alarms->hasUnresolved(); } // silinmemiş arıza var mı?
+    int alarmCount() const { return m_alarms->unresolved(); }
+    bool canResetAlarms() const { return m_alarms->canReset(); } // RESET bir şey siler mi?
+
+    // Silinmemiş arızaların en yenisi: üst şeritte bu yazar.
+    QString alarmTitle() const
+    {
+        const AlarmList::Alarm *alarm = m_alarms->newest();
+        return alarm ? alarm->title : QString();
+    }
+
+    QString alarmDetail() const
+    {
+        const AlarmList::Alarm *alarm = m_alarms->newest();
+        return alarm ? alarm->detail : QString();
+    }
+
+    // RESET: sebebi geçmiş arızaları siler. Hiçbir şeyi hareket ettirmez, hiçbir şey
+    // başlatmaz; yalnızca yeniden başlatmaya izin verir (ISO 13850'nin acil stop için
+    // koyduğu kural burada bütün arızalar için uygulanır). Sebebi süren arıza silinmez.
+    Q_INVOKABLE virtual bool resetAlarms() { return m_alarms->reset() > 0; }
 
     // Sanal makine mi? Ekranda "SANAL MAKİNE" etiketi göstermek için.
     virtual bool isSimulation() const = 0;
@@ -291,8 +327,23 @@ signals:
     void countersChanged();
     void toolingChanged();
     void loadPositionChanged();
+    void alarmsChanged(); // arıza oluştu, sebebi değişti ya da silindi
 
 protected:
+    // Arıza bildir (alt sınıflar kullanır). persistent: sebebi sürüyor demektir; böyle bir
+    // arıza, sebebi geçtiği makine tarafından bildirilene kadar RESET ile silinemez.
+    void raiseAlarm(const QString &code, const QString &title, const QString &detail,
+                    bool persistent = false)
+    {
+        m_alarms->raise(code, title, detail, persistent);
+    }
+
+    // Süren bir arızanın sebebi geçti (ya da yeniden oluştu).
+    void setAlarmCondition(const QString &code, bool present)
+    {
+        m_alarms->setCondition(code, present);
+    }
+
     // Boru alma konumu makinenin ayarıdır: alt sınıf yazar (açılışta ve ayar değişince).
     void setLoadPosition(double position)
     {
@@ -401,4 +452,5 @@ private:
     ParameterList *const m_settings;
     IoList *const m_inputs;
     IoList *const m_outputs;
+    AlarmList *const m_alarms;
 };

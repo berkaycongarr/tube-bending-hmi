@@ -41,6 +41,7 @@ public:
     void resetPartCount() override;
     bool setTooling(double dieRadius, double tubeDiameter, bool mandrel, bool feedDuringBend) override;
     bool clearTooling() override;
+    bool resetAlarms() override;
 
 private:
     // Sanal makinenin her eksen için tuttuğu bilgiler.
@@ -126,6 +127,9 @@ private:
     void updateHoming(double dt);    // referans aramayı dt saniye ilerlet
     void updateMotion(double dt);    // jog ve konuma gitmeyi dt saniye ilerlet
     void updateCycle(double dt);     // üretim döngüsünü dt saniye ilerlet
+
+    void raiseCycleAlarm(CycleFault fault);  // arızayı operatörün diliyle bildir
+    void raiseTimeoutAlarm();                // zaman aşımında hangi olay beklenmişti?
 
     void beginPhase(Phase phase);            // aşamayı başlat (komutları ver)
     void beginStep();                        // sıradaki program adımını başlat

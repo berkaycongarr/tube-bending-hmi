@@ -123,11 +123,50 @@ oynatılırsa döngü kaldığı yerden yanlış devam eder. Silindirler ise bek
 
 Basınç kesilirse ya da bir aşama beklenen sürede bitmezse döngü arızayla durur; silindirler
 olduğu gibi kalır — yarıda kalan bir parçada mengenenin kendiliğinden açılması tehlikelidir,
-kararı operatör verir.
+kararı operatör verir. Arızanın ekranda nasıl göründüğü ve nasıl silindiği aşağıdaki
+"Arızalar, arıza şeridi ve RESET" bölümündedir.
 
 Varsayımlar (demoda müşteriye sorulacak): boru alma konumunun varsayılanı (500 mm),
 ZAMANLAR'daki sürelerin kendileri ve varsayılan değerleri, BÜK ile ROTASYON değerlerinin
 mutlak olması, BÜKÜMDE İLERLE'nin "araba motorla itilir" anlamına gelmesi.
+
+## Arızalar, arıza şeridi ve RESET
+
+Makine bir arıza bulunca döngüyü keser ve arızayı **mühürler**: sebebi geçse bile kendiliğinden
+silinmez. Arıza silinmeden üretim başlamaz (ÜRETİM sayfası "arıza var → RESET" yazar, makine de
+START'ı kendisi reddeder). **RESET** yalnızca sebebi geçmiş arızaları siler; hiçbir şeyi hareket
+ettirmez, hiçbir şeyi başlatmaz. Yeniden başlatmak ayrı ve bilinçli bir komuttur (BAŞLAT).
+
+Bu kurallar sanayideki yerleşik uygulamadır: acil durdurma standardı (ISO 13850) "arızayı
+silmek makineyi çalıştırmaz, yalnızca çalıştırmaya izin verir" der; sebep dururken arızayı
+silmeye izin vermek de sonraki arızaların görülmesini engeller ("arıza maskeleme").
+
+Arıza varken üst şeridin sol bölümünü (durum kutusu ve eksen konumları) kırmızı **arıza şeridi**
+alır: ne olduğu, nereye bakılacağı, **GEÇMİŞ** ve **RESET**. Şerit her sayfada durur, çünkü
+operatör hangi sayfada olursa olsun arızayı görmelidir; sayfaların yerleşiminden yer almaz.
+BAŞLAT ve STOP açıkta kalır, eksen konumları HAREKET sayfasında da vardır.
+
+Mesaj ne olduğunu ve nereye bakılacağını söyler:
+
+| Arıza | Mesajı |
+|---|---|
+| Mengene kapanmadı | I0.2 MENGENE KAPALI sensörü 8 s içinde gelmedi. Valfi (Q0.1), basıncı ve sensörü IO TEST'ten izleyin. |
+| Hidrolik basınç kesildi | Üretim sırasında basınç düştü, döngü durdu. Pompayı ve basınç şalterini (I0.0) IO TEST'ten kontrol edin. |
+| Boru alma konumuna varılamadı | Arabanın (X), büküm kolunun (B) ve rotasyonun (A) başlangıç konumuna dönüşü 45 s içinde tamamlanmadı… |
+
+Aynı arıza duruyorken ikinci kez listeye eklenmez. **ARIZA GEÇMİŞİ** (şerideki GEÇMİŞ ya da alt
+şeritteki buton) duran ve silinmiş arızaları zamanıyla listeler: bakımcı makinenin başına
+geçmeden önce neyin ne zaman olduğunu görür. Geçmiş şimdilik uygulama açıkken tutulur; dosyaya
+yazılması (izlenebilirlik) müşteriye sorulacak.
+
+**STOP arıza değildir**: operatörün kararıdır, kayıt açmaz.
+
+Üst şeritteki durum kutusu da makinenin o an ne yaptığını söyler: ÜRETİMDE (adım 2/5),
+BORU BEKLENİYOR, ADIM BEKLENİYOR, PARÇA BİTTİ, REFERANS ARANIYOR, HAZIR, REFERANSSIZ.
+
+Acil stop donanım butonudur (ISO 13850): ekrandaki STOP normal duruştur, acil stop yerine
+geçmez — dokunmatik ekran güvenlik devresi değildir. Makinenin acil stop girişinin ekranda
+gösterilmesi ve sanal makinede arıza üretme (demoda göstermek için) sıradaki adımdır.
 
 ## Ayarlar, zamanlar ve ayarcı şifresi
 
@@ -259,8 +298,9 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `src/tooling/DieLibrary.*` | Kalıp kütüphanesi: kalıplar, takılı kalıp, `kaliplar.json` biçimi |
 | `src/machine/ParameterList.*` | Makinenin ayarlanabilir değerleri (süreler, ayarlar): başlık, birim, varsayılan, aralık, kilit |
 | `src/machine/IoList.*` | Makinenin girişleri ya da çıkışları (IO TEST): adres, ad, durum (1/0), çıkışın kilidi |
+| `src/machine/AlarmList.*` | Makinenin arızaları: duranlar ve geçmiş, mühürleme ve RESET kuralı |
 | `src/access/AccessControl.*` | Ayarcı şifresi: kilidi açma, kendiliğinden kilitlenme, şifre değiştirme ve özeti |
-| `qml/Main.qml` | Ana çerçeve: üst şerit (durum, eksenler, BAŞLAT/STOP), sol menü, sayfalar |
+| `qml/Main.qml` | Ana çerçeve: üst şerit (durum, eksenler, arıza şeridi, BAŞLAT/STOP), sol menü, sayfalar |
 | `qml/ProductionPage.qml` | Üretim sayfası: açık program, LİSTE / SİMÜLASYON, takılı kalıp, üretim döngüsü, ilerleme, hidrolik, mod seçimi ve sayaçlar |
 | `qml/DesignPage.qml` | Tasarım sayfası: LİSTE (program tablosu) / SİMÜLASYON, boru ve kalıp, takılı kalıba uyum, açınım boyu |
 | `qml/ProgramTable.qml` | Program tablosu (TASARIM'da düzenlenir, ÜRETİM'de işlenen adımı vurgular) |
@@ -272,6 +312,7 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `qml/ProgramsDialog.qml` | Programlar penceresi: liste, AÇ / YENİ / FARKLI KAYDET / SİL |
 | `qml/NameDialog.qml` | Program adı girme penceresi |
 | `qml/ConfirmDialog.qml` | Onay ve bilgi penceresi |
+| `qml/AlarmsDialog.qml` | Arıza geçmişi penceresi: duran ve silinmiş arızalar, RESET |
 | `qml/MotionPage.qml` | Hareket sayfası: jog, hedef konuma gitme ve hidrolik |
 | `qml/SettingsPage.qml` | Ayarlar sayfası: eksen limitleri ve hızları, boru alma konumu, şifre değiştirme |
 | `qml/TimersPage.qml` | Zamanlar sayfası: makinenin süreleri, varsayılana dönme |

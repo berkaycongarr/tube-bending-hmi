@@ -622,6 +622,15 @@ bool SimMachine::clearTooling()
     return ok;
 }
 
+bool SimMachine::resetAlarms()
+{
+    // RESET yalnızca arızayı siler; hareket başlatmaz. Arıza silinince BAŞLAT'ın önü açılır.
+    const bool cleared = IMachine::resetAlarms();
+    if (cleared)
+        updateInterlocks();
+    return cleared;
+}
+
 // ---------------------------------------------------------------------------
 // Döngü
 // ---------------------------------------------------------------------------
@@ -746,6 +755,8 @@ void SimMachine::updateStartBlock()
 
     if (cycleState() == CycleRunning)
         block = BlockRunning;
+    else if (hasAlarm())
+        block = BlockAlarm; // arıza silinmeden (RESET) üretim başlamaz
     else if (state() != Ready)
         block = BlockNotHomed; // referanssız makinede konumlar bilinmez
     else if (pumpState() != PumpRunning)
@@ -1133,10 +1144,104 @@ void SimMachine::waitForOperator(WaitReason reason)
     setCycle(CycleWaiting, reason, step, int(m_recipe.size()));
 }
 
+// Arızayı operatörün diliyle bildirir: ne oldu (başlık) ve nereye bakılacak (ayrıntı).
+// Arıza mühürlenir; RESET'e basılmadan üretim başlamaz.
+void SimMachine::raiseCycleAlarm(CycleFault fault)
+{
+    switch (fault) {
+    case NoFault: // operatörün STOP'u: arıza değil
+        break;
+    case FaultTimeout:
+        raiseTimeoutAlarm();
+        break;
+    case FaultPressure:
+        raiseAlarm(QStringLiteral("basincKesildi"), tr("HİDROLİK BASINÇ KESİLDİ"),
+                   tr("Üretim sırasında basınç düştü, döngü durdu. Pompayı ve basınç şalterini "
+                      "(I0.0) IO TEST'ten kontrol edin."));
+        break;
+    case FaultLimit:
+        raiseAlarm(QStringLiteral("limitDisi"), tr("HAREKET EKSEN LİMİTİ DIŞINDA"),
+                   tr("Makine, programın istediği konuma eksen limitleri içinde gidemiyor. "
+                      "AYARLAR'daki limitlere ve boru alma konumuna bakın."));
+        break;
+    case FaultRecipe:
+        raiseAlarm(QStringLiteral("programHatali"), tr("PROGRAM HATALI"),
+                   tr("Program boş ya da tanınmayan bir komut içeriyor; makine tarifi kabul etmedi."));
+        break;
+    case FaultTooling:
+        raiseAlarm(QStringLiteral("kalipUymuyor"), tr("PROGRAM TAKILI KALIBA UYMUYOR"),
+                   tr("Programın kalıp yarıçapı ya da boru çapı, makineye bildirilen takılı "
+                      "kalıbınkiyle aynı değil (KALIPLAR)."));
+        break;
+    }
+}
+
+void SimMachine::raiseTimeoutAlarm()
+{
+    // Hangi aşamada, hangi olay beklenirken süre doldu? Bakımcı doğrudan oraya baksın:
+    // silindir beklenen aşamalarda sensörün adresi, eksen hareketlerinde eksenin adı yazılır.
+    const QString seconds = QString::number(m_phaseTimeout, 'f', 0);
+    auto sensor = [&](const char *code, const QString &title, const QString &address,
+                      const QString &name, const QString &valve) {
+        raiseAlarm(QLatin1String(code), title,
+                   tr("%1 %2 sensörü %3 s içinde gelmedi. Valfi (%4), basıncı ve sensörü "
+                      "IO TEST'ten izleyin.").arg(address, name, seconds, valve));
+    };
+    auto axis = [&](const char *code, const QString &title, const QString &what) {
+        raiseAlarm(QLatin1String(code), title,
+                   tr("%1 %2 s içinde tamamlanmadı. Eksenin önünde engel var mı, sürücü arıza "
+                      "veriyor mu bakın.").arg(what, seconds));
+    };
+
+    switch (m_phase) {
+    case Phase::ClampClose:
+        sensor("mengeneKapanmadi", tr("MENGENE KAPANMADI"), QStringLiteral("I0.2"),
+               tr("MENGENE KAPALI"), QStringLiteral("Q0.1"));
+        break;
+    case Phase::ClampOpen:
+        sensor("mengeneAcilmadi", tr("MENGENE AÇILMADI"), QStringLiteral("I0.1"),
+               tr("MENGENE AÇIK"), QStringLiteral("Q0.1"));
+        break;
+    case Phase::MandrelOut:
+        sensor("malafaCikmadi", tr("MALAFA İLERİ GİTMEDİ"), QStringLiteral("I0.4"),
+               tr("MALAFA İLERİDE"), QStringLiteral("Q0.2"));
+        break;
+    case Phase::MandrelBack:
+        sensor("malafaGelmedi", tr("MALAFA GERİ GELMEDİ"), QStringLiteral("I0.3"),
+               tr("MALAFA GERİDE"), QStringLiteral("Q0.2"));
+        break;
+    case Phase::ColletOpen:
+        sensor("pensAcilmadi", tr("PENS AÇILMADI"), QStringLiteral("I0.5"), tr("PENS AÇIK"),
+               QStringLiteral("Q0.3"));
+        break;
+    case Phase::ToLoadPosition:
+        axis("basaGidilemedi", tr("BORU ALMA KONUMUNA VARILAMADI"),
+             tr("Arabanın (X), büküm kolunun (B) ve rotasyonun (A) başlangıç konumuna dönüşü"));
+        break;
+    case Phase::Feed:
+        axis("arabaIlerlemedi", tr("ARABA İLERLEMEDİ"), tr("Arabanın (X) ilerlemesi"));
+        break;
+    case Phase::Bend:
+        axis("bukumOlmadi", tr("BÜKÜM TAMAMLANMADI"), tr("Büküm kolunun (B) açıya dönüşü"));
+        break;
+    case Phase::BendHome:
+        axis("kolDonmedi", tr("BÜKÜM KOLU BAŞA DÖNMEDİ"), tr("Büküm kolunun (B) başa dönüşü"));
+        break;
+    case Phase::Rotate:
+        axis("rotasyonOlmadi", tr("ROTASYON TAMAMLANMADI"), tr("Rotasyonun (A) açıya dönüşü"));
+        break;
+    default:
+        axis("adimBitmedi", tr("ADIM BEKLENEN SÜREDE BİTMEDİ"), tr("Döngü adımı"));
+        break;
+    }
+}
+
 void SimMachine::abortCycle(CycleFault fault)
 {
     // Hareket kesilir; silindirler olduğu gibi kalır. Yarıda kalan bir parçada
     // mengenenin kendiliğinden açılması tehlikelidir: kararı operatör verir.
+    // Arıza, RESET'e basılana kadar duran bir alarm olarak kalır.
+    raiseCycleAlarm(fault);
     haltAllMotion();
     m_phase = Phase::None;
     m_resumePhase = Phase::None;
