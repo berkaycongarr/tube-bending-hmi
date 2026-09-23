@@ -1,5 +1,6 @@
-# Derleme çıktıları (Qt Creator bunları build/ klasörüne koyar)
+# Derleme çıktıları: Qt Creator build/ kullanır, demo paketi build-release/
 build/
+build-*/
 
 # Qt Creator'ın kişisel ayar dosyaları
 *.user

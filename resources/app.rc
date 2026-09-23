@@ -1,0 +1,29 @@
+// Windows kaynak dosyası: exe'nin içine gömülen ikon ve bilgiler.
+//
+// IDI_ICON1 adı önemlidir: Qt, pencerenin ve görev çubuğunun ikonu olarak exe'deki ilk
+// ikonu kullanır. Aşağıdaki VERSIONINFO ise exe'ye sağ tıklayıp Özellikler → Ayrıntılar
+// dendiğinde görünen bilgilerdir.
+IDI_ICON1 ICON "app.ico"
+
+1 VERSIONINFO
+FILEVERSION 0,1,0,0
+PRODUCTVERSION 0,1,0,0
+FILEOS 0x4L      // VOS__WINDOWS32
+FILETYPE 0x1L    // VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041F04B0"  // dil: Türkçe (0x041F), kod sayfası: Unicode (1200)
+        BEGIN
+            VALUE "FileDescription", "Boru Makinesi Demo"
+            VALUE "FileVersion", "0.1.0.0"
+            VALUE "ProductName", "Boru Makinesi Demo"
+            VALUE "ProductVersion", "0.1.0.0"
+            VALUE "OriginalFilename", "appBoruHmi.exe"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x41F, 1200
+    END
+END

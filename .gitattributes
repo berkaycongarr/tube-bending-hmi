@@ -1,2 +1,5 @@
 # Satır sonlarını Git düzenlesin: depoda LF, Windows'ta CRLF.
 * text=auto
+
+# İkon ikili dosyadır: satır sonu düzeltmesi uygulanırsa bozulur.
+*.ico binary

@@ -1,3 +1,4 @@
+#include <QDir>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QSettings>
@@ -33,10 +34,21 @@ int main(int argc, char *argv[])
     for (Axis *axis : { machine.axisX(), machine.axisB(), machine.axisA() })
         QObject::connect(axis, &Axis::parametersChanged, &program, applyStepLimits);
 
-    // Programlar Belgeler\BoruBukme\Programlar klasöründe, her biri ayrı bir dosya.
+    // Veri klasörü: programlar, kalıplar, makinenin belleği ve ekranın ayarları.
+    //
+    // Programın yanında "veri" adlı bir klasör varsa oraya yazılır: demo klasörünü
+    // USB'ye kopyalayınca programlar ve kalıplar da beraber gider, çalıştırılan
+    // bilgisayarda iz bırakmaz. Yoksa kullanıcının Belgeler\BoruBukme klasörü kullanılır.
     // Gerçek makinede burası sabit bir klasör ya da fabrikanın ağ klasörü olabilir.
-    const QString dataFolder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-                               + QStringLiteral("/BoruBukme");
+    const QString portableFolder = QCoreApplication::applicationDirPath()
+                                   + QStringLiteral("/veri");
+    const QString dataFolder =
+        QDir(portableFolder).exists()
+            ? portableFolder
+            : QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                  + QStringLiteral("/BoruBukme");
+
+    // Her program bu klasörün altında ayrı bir dosyadır.
     ProgramStore store(dataFolder + QStringLiteral("/Programlar"), &program);
 
     // Makinenin belleği: ZAMANLAR'daki süreler ve AYARLAR'daki değerler. Gerçek makinede
@@ -117,6 +129,12 @@ int main(int argc, char *argv[])
                           machine.cycleMode() == IMachine::SemiAutomaticCycle);
     });
 
+    // Tam ekran: gerçek panelde operatör Windows'u, pencere çerçevesini ve kapat
+    // düğmesini görmemeli. Kısayola --tam-ekran eklenince program çerçevesiz açılır.
+    // Masaüstünde demo yaparken pencere daha kullanışlı olduğu için varsayılan penceredir;
+    // her iki durumda da F11 ile değiştirilebilir.
+    const bool fullScreen = app.arguments().contains(QStringLiteral("--tam-ekran"));
+
     QQmlApplicationEngine engine;
 
     // Main.qml'deki "required property" alanlarını dolduruyoruz.
@@ -128,6 +146,7 @@ int main(int argc, char *argv[])
         { QStringLiteral("dies"), QVariant::fromValue(&dies) },
         { QStringLiteral("access"), QVariant::fromValue(&access) },
         { QStringLiteral("simulator"), QVariant::fromValue(&simulator) },
+        { QStringLiteral("fullScreen"), fullScreen },
     });
 
     // QML dosyası yüklenemezse (yazım hatası vb.) programı kapat.

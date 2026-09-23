@@ -6,6 +6,12 @@ project(BoruBukmeHmi VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Demo paketi düz bir klasör olsun: exe, Qt'nin DLL'leri ve veri klasörü yan yana dursun.
+# Qt bu değeri find_package sırasında okuyup dağıtım aracına (windeployqt) verdiği için
+# find_package'dan ÖNCE ayarlanmalıdır. Varsayılanı "bin" olurdu: o zaman exe kökte,
+# DLL'ler bin\ altında kalır ve program Qt kurulu olmayan bilgisayarda açılmaz.
+set(CMAKE_INSTALL_BINDIR ".")
+
 # Qt 6.8 veya daha yenisini bul. Bize Quick (QML) modülü yetiyor.
 find_package(Qt6 6.8 REQUIRED COMPONENTS Quick)
 
@@ -84,11 +90,60 @@ qt_add_qml_module(appBoruHmi
 
 # Qt'nin ürettiği kayıt kodu başlık dosyalarını yalnızca adıyla çağırır
 # (#include <Axis.h>). Bu yüzden klasörleri arama yoluna ekliyoruz.
-target_include_directories(appBoruHmi PRIVATE src/machine src/program src/tooling src/access)
+# resources da burada: Windows kaynak derleyicisi (windres) app.ico'yu bu yolda arar.
+target_include_directories(appBoruHmi PRIVATE
+    src/machine src/program src/tooling src/access resources
+)
 
 # Windows'ta programın arkasında siyah konsol penceresi açılmasın.
 set_target_properties(appBoruHmi PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+# Programın ikonu ve "Özellikler" penceresinde görünen bilgiler exe'nin içine gömülür.
+if(WIN32)
+    target_sources(appBoruHmi PRIVATE resources/app.rc)
+endif()
+
 target_link_libraries(appBoruHmi PRIVATE Qt6::Quick)
+
+# --- Demo paketi ------------------------------------------------------------------
+# Amaç: Qt kurulu olmayan bir bilgisayarda da çalışan tek klasör. Kurulum şunu yapar:
+#   1) exe'yi klasöre kopyalar,
+#   2) Qt'nin gerektirdiği DLL'leri ve QML modüllerini yanına koyar (windeployqt),
+#   3) MinGW'nin çalışma zamanı kitaplıklarını ekler.
+# Kullanımı README'deki "Demo paketi" bölümünde.
+install(TARGETS appBoruHmi
+    BUNDLE DESTINATION .
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# Paketin kendi veri klasörü: kurulan sürüm programları, kalıpları ve ayarları kendi
+# yanında tutar; klasörü USB'ye kopyalayınca hepsi beraber gider ve çalıştığı
+# bilgisayarda iz bırakmaz. Qt Creator'dan çalıştırılan sürümün yanında böyle bir klasör
+# olmadığı için orada veriler Belgeler\BoruBukme altına yazılmaya devam eder.
+install(DIRECTORY DESTINATION veri)
+
+# NO_TRANSLATIONS: Qt'nin kendi hazır çevirileri (32 dil, ~7 MB) bu programda
+# kullanılmıyor — ekrandaki bütün yazılar zaten Türkçe yazılmış durumda.
+qt_generate_deploy_qml_app_script(
+    TARGET appBoruHmi
+    OUTPUT_SCRIPT deploy_script
+    MACOS_BUNDLE_POST_BUILD
+    NO_UNSUPPORTED_PLATFORM_ERROR
+    NO_TRANSLATIONS
+)
+install(SCRIPT ${deploy_script})
+
+# MinGW ile derlenen program bu üç kitaplığa muhtaçtır; bazı Qt sürümlerinde yukarıdaki
+# adım bunları kopyalamıyor ve program başka bilgisayarda "DLL bulunamadı" diye açılmıyor.
+# Derleyicinin yanındaki dosyaları buluyorsak paketin içine biz koyuyoruz.
+if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    get_filename_component(mingw_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    foreach(runtime_dll libgcc_s_seh-1 libstdc++-6 libwinpthread-1)
+        if(EXISTS "${mingw_bin}/${runtime_dll}.dll")
+            install(FILES "${mingw_bin}/${runtime_dll}.dll" DESTINATION .)
+        endif()
+    endforeach()
+endif()

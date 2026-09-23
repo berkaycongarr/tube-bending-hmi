@@ -12,10 +12,10 @@ Window {
     // main.cpp tarafından verilen büküm programı (reçete).
     required property BendProgram program
 
-    // main.cpp tarafından verilen program deposu (Belgeler\BoruBukme\Programlar).
+    // main.cpp tarafından verilen program deposu (veri klasörünün Programlar alt klasörü).
     required property ProgramStore store
 
-    // main.cpp tarafından verilen kalıp kütüphanesi (Belgeler\BoruBukme\kaliplar.json).
+    // main.cpp tarafından verilen kalıp kütüphanesi (veri klasöründeki kaliplar.json).
     required property DieLibrary dies
 
     // main.cpp tarafından verilen ayarcı şifresi denetimi (ayar sayfaları için).
@@ -33,6 +33,18 @@ Window {
     // önce KAYDET / KAYDETME / İPTAL diye sorulur.
     property bool exitConfirmed: false
 
+    // Tam ekran mı? Gerçek panelde operatör pencere çerçevesini ve kapat düğmesini
+    // görmemeli; oraya kurarken kısayola --tam-ekran eklenir ve main.cpp burayı doğru
+    // yapar. Masaüstünde demo yaparken pencere daha kullanışlıdır (varsayılan).
+    property bool fullScreen: false
+
+    // F11 her iki yönde de çalışır: panelde ayarcı geçici olarak pencereye dönebilir,
+    // masaüstünde demo tam ekrana alınabilir.
+    Shortcut {
+        sequences: ["F11"]
+        onActivated: root.fullScreen = !root.fullScreen
+    }
+
     onClosing: close => {
         if (root.program.modified && !root.exitConfirmed) {
             close.accepted = false
@@ -45,6 +57,7 @@ Window {
     minimumWidth: 1024
     minimumHeight: 720
     visible: true
+    visibility: root.fullScreen ? Window.FullScreen : Window.AutomaticVisibility
     title: qsTr("Boru Bükme Makinesi")
     color: Theme.background
 

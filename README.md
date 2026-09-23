@@ -16,6 +16,76 @@ Ekranın sol altındaki "SANAL MAKİNE" yazısı bunu hatırlatır.
 2. Kit olarak **Desktop Qt 6.11.2 MinGW 64-bit** seçin → **Configure Project**
 3. Sol alttaki ▶ butonu (Ctrl+R)
 
+## Demo paketi (tek klasör)
+
+Qt kurulu olmayan bir bilgisayarda da çalışan, tek klasörlük sürüm. Başlat menüsündeki
+**Qt 6.11.2 (MinGW 13.1.0 64-bit)** komut istemi derleyiciyi hazırlar; CMake ile Ninja
+Qt'nin `Tools` klasöründedir, onları da yola eklemek gerekir:
+
+```
+set PATH=C:\Qt\Tools\CMake_64\bin;C:\Qt\Tools\Ninja;%PATH%
+cd C:\Projeler\boru-bukme-hmi
+cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:\Qt\6.11.2\mingw_64
+cmake --build build-release
+cmake --install build-release --prefix C:\Projeler\BoruMakinesiDemo
+```
+
+Klasör adları farklıysa `C:\Qt\Tools` içine bakıp düzeltin. Ninja bulunamazsa
+`-G Ninja` yerine `-G "MinGW Makefiles"` de olur; yalnızca derleme biraz yavaşlar.
+
+Kurulan klasör şöyle görünür:
+
+```
+BoruMakinesiDemo\
+├── appBoruHmi.exe
+├── Qt6Core.dll, Qt6Gui.dll, Qt6Quick.dll … (Qt kitaplıkları)
+├── libgcc_s_seh-1.dll, libstdc++-6.dll, libwinpthread-1.dll (MinGW)
+├── qt.conf          ← eklentilerin ve QML modüllerinin yerini söyler
+├── plugins\         ← platforms\qwindows.dll, imageformats\ …
+├── qml\             ← QtQuick, QtQml, QtQuick.Layouts …
+└── veri\            ← programlar, kalıplar, ayarlar
+```
+
+Programın DLL'leri kendi yanında olmalı; bu yüzden `CMAKE_INSTALL_BINDIR` "." yapılmıştır
+(`find_package`'dan önce). Varsayılan "bin" bırakılsaydı exe kökte, DLL'ler `bin\` altında
+kalır ve program Qt kurulu olmayan bilgisayarda açılmazdı.
+
+Klasör olduğu gibi kopyalanabilir; karşı bilgisayarda kurulum gerekmez. Kodda değişiklik
+olduğunda son iki komutu tekrarlamak yeter; `veri` klasörünün içindekiler silinmez.
+
+### Veri klasörü
+
+Programlar, kalıplar, makinenin belleği ve ekranın ayarları **veri klasörüne** yazılır:
+
+| Durum | Veri klasörü |
+|---|---|
+| `appBoruHmi.exe`'nin yanında `veri` adlı klasör varsa | o klasör |
+| yoksa | `Belgeler\BoruBukme` |
+
+Kurulan pakette `veri` klasörü hazır gelir: demo taşınabilirdir, USB'yle taşındığında
+programlar ve kalıplar da beraber gider, çalıştırıldığı bilgisayarda iz bırakmaz.
+Qt Creator'dan çalıştırılan sürümün yanında böyle bir klasör olmadığı için orada
+veriler `Belgeler\BoruBukme` altına yazılır — demo paketi ile geliştirme sırasındaki
+programlar birbirine karışmaz.
+
+### Tam ekran
+
+Gerçek panelde operatör Windows'u, pencere çerçevesini ve kapat düğmesini görmemeli.
+Kısayola `--tam-ekran` eklenirse program çerçevesiz, tam ekran açılır:
+
+```
+C:\Projeler\BoruMakinesiDemo\appBoruHmi.exe --tam-ekran
+```
+
+Masaüstünde demo yaparken pencere daha kullanışlı olduğundan varsayılan penceredir.
+**F11** her iki yönde de çalışır.
+
+### İkon ve sürüm bilgisi
+
+`resources/app.ico` ve `resources/app.rc` exe'nin içine gömülür: kısayolda, görev
+çubuğunda ve pencere köşesinde bu ikon görünür. Exe'ye sağ tıklayıp Özellikler →
+Ayrıntılar dendiğinde "Boru Makinesi Demo" ve sürüm numarası yazar.
+
 ## Eksenler
 
 | Eksen | Görevi | Birim |
@@ -43,9 +113,9 @@ geçişte değişmez. Adımların alabileceği değerler makinenin eksen limitle
 
 ## Programlar
 
-Her program `Belgeler\BoruBukme\Programlar` klasöründe ayrı bir `.json` dosyasıdır;
+Her program veri klasörünün `Programlar` alt klasöründe ayrı bir `.json` dosyasıdır;
 dosyanın adı programın adıdır. Dosyalar kopyalanabilir, başka makineye taşınabilir.
-Son açılan program `Belgeler\BoruBukme\ayarlar.ini` içinde tutulur; uygulama açılınca
+Son açılan program veri klasöründeki `ayarlar.ini` içinde tutulur; uygulama açılınca
 o program açılır. Klasör boşsa örnek program oraya kaydedilir.
 
 Kaydetme güvenlidir (`QSaveFile`): önce geçici bir dosyaya yazılır, yazma bitince eski
@@ -61,7 +131,7 @@ açıklaması (ör. `25X50XR116`), kalıp yarıçapı (boru ekseninde), aldığ�
 ayarı vardır: **MALAFALI BÜK** ve **BÜKÜMDE İLERLE** (müşterinin ekranındaki "AKTİF KALIP"
 bilgileri). İlk açılışta müşterinin ekranındaki kalıp örnek olarak eklenir.
 
-Kalıplar tek bir dosyada, `Belgeler\BoruBukme\kaliplar.json` içinde saklanır ve her
+Kalıplar tek bir dosyada, veri klasöründeki `kaliplar.json` içinde saklanır ve her
 değişiklik hemen, güvenli biçimde (`QSaveFile`) yazılır; dosyaya yazılamazsa liste de
 değişmez. Dosya bozuksa üzerine yazılmaz: `kaliplar.json.bozuk` adıyla yedeklenir ve
 liste boş başlar.
@@ -246,7 +316,7 @@ kullanılır.
 | Silindir zaman aşımı | 8 s | 1 – 60 s | Mengene, malafa ya da pens bu sürede yerine gitmezse arıza |
 
 Süreler ve ayarlar makinenin belleğinde durur: gerçek makinede PLC'nin kalıcı belleğinde,
-sanal makinede `Belgeler\BoruBukme\makine.ini` dosyasında. Değişen süre hemen geçerli olur;
+sanal makinede veri klasöründeki `makine.ini` dosyasında. Değişen süre hemen geçerli olur;
 döngü sürerken değiştirilirse sıradaki aşamada kullanılır. Varsayılandan farklı olan
 sürenin "Varsayılan" yazısı turuncudur; ↺ varsayılana döndürür. Dosyada sayı olmayan ya
 da aralık dışında bir değer varsa yok sayılır, varsayılan kullanılır.
@@ -372,3 +442,5 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `qml/PumpControl.qml` | Hidrolik pompa: START/STOP, durum ve basınç |
 | `qml/ActuatorButton.qml` | Kalıcı buton mantığıyla silindir kumandası |
 | `qml/AxisDisplay.qml` | Eksen konum göstergesi |
+| `resources/app.ico` | Programın ikonu (16–256 piksel) |
+| `resources/app.rc` | İkonun ve sürüm bilgisinin exe'ye gömülmesi (yalnızca Windows) |
