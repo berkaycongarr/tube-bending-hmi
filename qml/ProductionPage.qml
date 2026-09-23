@@ -115,6 +115,26 @@ Rectangle {
     readonly property color cycleTextColor: page.statusKind === "fault" ? Theme.danger
                                             : page.statusKind === "ready" ? Theme.ok : Theme.activeText
 
+    // Parça süresi: üretim sürerken süren parçanın, dururken son parçanın süresi.
+    // Makine süresi ile operatör beklemesi ayrı gösterilir: zamanın nereye gittiği görünsün.
+    readonly property string partTimeText: {
+        // Parça bittiğinde (yeni parça beklenirken) artık son parçanın sonucu yazar.
+        const finished = page.machine.cycleState === Machine.CycleStopped
+                         || (page.machine.cycleState === Machine.CycleWaiting
+                             && page.machine.waitReason === Machine.WaitPart)
+        if (!finished)
+            return qsTr("Parça %1 s").arg(page.machine.partSeconds.toFixed(1))
+        if (page.machine.lastPartSeconds <= 0)
+            return ""
+        return qsTr("Son parça %1 s · makine %2 s").arg(page.machine.lastPartSeconds.toFixed(1))
+                                                   .arg(page.machine.lastPartMachineSeconds.toFixed(1))
+    }
+
+    // Saatlik üretim, son parçaların ortalamasından: tek parça yanıltıcı olur.
+    readonly property string rateText: page.machine.averagePartSeconds > 0
+                                       ? Math.round(3600 / page.machine.averagePartSeconds).toString()
+                                       : "—"
+
     // İlerleme: kaçıncı adımdayız? Parça bitince dolu görünür.
     readonly property real progress: {
         if (page.machine.stepCount <= 0 || page.machine.cycleState === Machine.CycleStopped)
@@ -405,6 +425,14 @@ Rectangle {
                     }
 
                     Text {
+                        objectName: "partTimeText"
+                        visible: page.partTimeText.length > 0
+                        text: page.partTimeText
+                        font.pixelSize: 14
+                        color: Theme.textMuted
+                    }
+
+                    Text {
                         objectName: "stepText"
                         visible: page.stepText.length > 0
                         text: page.stepText
@@ -584,6 +612,13 @@ Rectangle {
                         caption: qsTr("TOPLAM ADET")
                         value: page.machine.totalCount
                     }
+
+                    // Fabrikanın en çok baktığı sayı: bu hızla saatte kaç parça çıkar?
+                    Counter {
+                        objectName: "hourlyRate"
+                        caption: qsTr("SAATTE (ADET)")
+                        valueText: page.rateText
+                    }
                 }
             }
         }
@@ -650,7 +685,8 @@ Rectangle {
         id: counter
 
         required property string caption
-        required property int value
+        property int value: 0
+        property string valueText: "" // sayı yerine yazı (ör. "—")
 
         Layout.fillWidth: true
         Layout.preferredWidth: 1
@@ -667,11 +703,14 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 0
 
+            // Dar ekranda (1024) başlık kesilmesin: önce küçülür.
             Text {
                 width: parent.width
                 text: counter.caption
                 font.pixelSize: 11
                 font.bold: true
+                fontSizeMode: Text.HorizontalFit
+                minimumPixelSize: 9
                 color: Theme.textMuted
                 elide: Text.ElideRight
             }
@@ -679,7 +718,7 @@ Rectangle {
             Text {
                 objectName: "counterValue"
                 width: parent.width
-                text: counter.value.toString()
+                text: counter.valueText.length > 0 ? counter.valueText : counter.value.toString()
                 font.pixelSize: 18
                 font.bold: true
                 color: Theme.text

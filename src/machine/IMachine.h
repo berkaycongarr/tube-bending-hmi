@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QList>
 #include <QObject>
 #include <QVariant>
 
@@ -45,6 +46,10 @@ class IMachine : public QObject
     Q_PROPERTY(CycleMode cycleMode READ cycleMode WRITE setCycleMode NOTIFY cycleModeChanged)
     Q_PROPERTY(int partCount READ partCount NOTIFY countersChanged)
     Q_PROPERTY(int totalCount READ totalCount NOTIFY countersChanged)
+    Q_PROPERTY(double partSeconds READ partSeconds NOTIFY partTimesChanged)
+    Q_PROPERTY(double lastPartSeconds READ lastPartSeconds NOTIFY partTimesChanged)
+    Q_PROPERTY(double lastPartMachineSeconds READ lastPartMachineSeconds NOTIFY partTimesChanged)
+    Q_PROPERTY(double averagePartSeconds READ averagePartSeconds NOTIFY partTimesChanged)
     Q_PROPERTY(double loadPosition READ loadPosition NOTIFY loadPositionChanged)
     Q_PROPERTY(bool hasTooling READ hasTooling NOTIFY toolingChanged)
     Q_PROPERTY(double toolingRadius READ toolingRadius NOTIFY toolingChanged)
@@ -297,6 +302,15 @@ public:
     int partCount() const { return m_partCount; }   // bu programda üretilen adet
     int totalCount() const { return m_totalCount; } // makinenin toplam adedi
 
+    // Parça süresi (saatlik üretimin kaynağı). İki parça ayrı sayılır:
+    //   makine süresi : makinenin çalıştığı süre
+    //   bekleme       : operatör beklenen süre (boru takma, yarı otomatikte adım onayı)
+    // Saatlik üretim, son parçaların ortalamasından hesaplanır: tek parça yanıltır.
+    double partSeconds() const { return m_partRun + m_partWait; } // süren parçada geçen süre
+    double lastPartSeconds() const { return m_lastPart; }         // son parça, beklemeyle
+    double lastPartMachineSeconds() const { return m_lastPartMachine; }
+    double averagePartSeconds() const { return m_averagePart; }   // son parçaların ortalaması
+
     // Boru alma konumu: her parça buradan başlar, boru burada takılır (mm).
     // Müşterinin ekranında "BORU ALMA KONUM X" olarak görünüyor; AYARLAR'dan değişir.
     double loadPosition() const { return m_loadPosition; }
@@ -332,6 +346,7 @@ signals:
     void countersChanged();
     void toolingChanged();
     void loadPositionChanged();
+    void partTimesChanged();
     void alarmsChanged(); // arıza oluştu, sebebi değişti ya da silindi
     void emergencyStopChanged();
 
@@ -421,6 +436,43 @@ protected:
         emit startBlockChanged();
     }
 
+    // Parça süresi ölçümü (alt sınıf çağırır).
+    void startPartTiming()
+    {
+        m_partRun = 0.0;
+        m_partWait = 0.0;
+        m_partTick = 0.0;
+        emit partTimesChanged();
+    }
+
+    // Geçen süreyi ekle: waiting true ise operatör bekleniyordu.
+    void addPartTime(double seconds, bool waiting)
+    {
+        (waiting ? m_partWait : m_partRun) += seconds;
+        // Ekran her turda değil, onda bir saniyede bir yenilensin.
+        m_partTick += seconds;
+        if (m_partTick < 0.1)
+            return;
+        m_partTick = 0.0;
+        emit partTimesChanged();
+    }
+
+    // Parça bitti: süresi kaydedilir, ortalama son parçalardan hesaplanır.
+    void finishPartTiming()
+    {
+        m_lastPart = m_partRun + m_partWait;
+        m_lastPartMachine = m_partRun;
+        m_recentParts.append(m_lastPart);
+        if (m_recentParts.size() > RecentPartCount)
+            m_recentParts.removeFirst();
+
+        double total = 0.0;
+        for (const double seconds : m_recentParts)
+            total += seconds;
+        m_averagePart = m_recentParts.isEmpty() ? 0.0 : total / m_recentParts.size();
+        emit partTimesChanged();
+    }
+
     // Bir parça bitti: iki sayaç da artar.
     void countPart()
     {
@@ -450,6 +502,14 @@ private:
     int m_stepCount = 0;
     int m_partCount = 0;
     int m_totalCount = 0;
+    static constexpr int RecentPartCount = 10; // ortalama bu kadar parçadan hesaplanır
+    double m_partRun = 0.0;         // süren parçada makinenin çalıştığı süre
+    double m_partWait = 0.0;        // süren parçada operatör beklenen süre
+    double m_partTick = 0.0;        // ekranın yenilenme sayacı
+    double m_lastPart = 0.0;        // son parçanın toplam süresi
+    double m_lastPartMachine = 0.0; // son parçanın makine süresi
+    double m_averagePart = 0.0;     // son parçaların ortalaması
+    QList<double> m_recentParts;
     double m_loadPosition = 0.0;
     bool m_emergencyStop = false;
     bool m_hasTooling = false;

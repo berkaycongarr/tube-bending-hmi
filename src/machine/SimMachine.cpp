@@ -616,6 +616,7 @@ void SimMachine::startCycle(const QVariantList &recipe, double dieRadius, double
 
     m_stepIndex = 0;
     m_resumePhase = Phase::None;
+    startPartTiming(); // yeni parça: süre baştan ölçülür
     setCycleFault(NoFault);
     setCycle(CycleRunning, NotWaiting, -1, int(m_recipe.size()));
     beginPhase(Phase::ToLoadPosition);
@@ -993,6 +994,14 @@ void SimMachine::updateMotion(double dt)
 
 void SimMachine::updateCycle(double dt)
 {
+    if (cycleState() == CycleStopped)
+        return;
+
+    // Parça süresi: makinenin çalıştığı süre ile operatörün beklettiği süre ayrı sayılır.
+    // Parça bittikten sonra (yeni parça beklenirken) süre sayılmaz: o süre sıradaki parçanındır.
+    if (!(cycleState() == CycleWaiting && waitReason() == WaitPart))
+        addPartTime(dt, cycleState() == CycleWaiting);
+
     if (cycleState() != CycleRunning)
         return;
 
@@ -1089,7 +1098,8 @@ void SimMachine::updateCycle(double dt)
     case Phase::ColletOpen:
         if (!actuatorAt(collet(), false))
             break;
-        // Parça bitti: sayaçlar artar, operatör parçayı alıp START'a basar.
+        // Parça bitti: süresi kaydedilir, sayaçlar artar, operatör parçayı alıp START'a basar.
+        finishPartTiming();
         countPart();
         waitForOperator(WaitPart);
         break;

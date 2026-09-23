@@ -130,6 +130,18 @@ Varsayımlar (demoda müşteriye sorulacak): boru alma konumunun varsayılanı (
 ZAMANLAR'daki sürelerin kendileri ve varsayılan değerleri, BÜK ile ROTASYON değerlerinin
 mutlak olması, BÜKÜMDE İLERLE'nin "araba motorla itilir" anlamına gelmesi.
 
+## Parça süresi ve saatlik üretim
+
+Makine her parçanın süresini ölçer ve ikiye ayırır: **makine süresi** (makinenin çalıştığı süre)
+ve **bekleme** (operatör beklenen süre: boru takma, yarı otomatikte adım onayı). Parça bitince
+ÜRETİM şeridinde "Son parça 23.0 s · makine 21.8 s" yazar; üretim sürerken süren parçanın süresi
+görünür. Parça bittikten sonra geçen süre sıradaki parçanın hanesine yazılır.
+
+**SAATTE (ADET)** kutusu son parçaların (en çok 10) ortalamasından hesaplanır: tek parça
+yanıltıcı olur. Fabrikanın en çok baktığı sayı budur; makine süresi ile beklemenin ayrı
+görünmesi de zamanın nereye gittiğini gösterir (ör. boru takma süresi kısaltılırsa saatlik
+üretim ne olur). Süreler uygulama açıkken tutulur, adet sayaçları gibi dosyaya yazılmaz.
+
 ## Arızalar, arıza şeridi ve RESET
 
 Makine bir arıza bulunca döngüyü keser ve arızayı **mühürler**: sebebi geçse bile kendiliğinden
