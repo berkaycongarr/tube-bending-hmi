@@ -242,6 +242,8 @@ Rectangle {
         readonly property string info: {
             const speed = qsTr("Jog %1").arg(row.formatSpeed(row.fast ? row.axis.jogSpeedFast
                                                                       : row.axis.jogSpeedSlow))
+            if (row.axis.interlock === Axis.EmergencyStop)
+                return speed + qsTr(" · Kilitli: acil stop basılı")
             if (row.axis.interlock === Axis.CycleActive)
                 return speed + qsTr(" · Kilitli: üretim döngüsü sürüyor")
             if (row.axis.interlock === Axis.ClampClosed)

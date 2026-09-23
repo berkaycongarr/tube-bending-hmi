@@ -46,6 +46,7 @@ const QString MandrelForwardInput = QStringLiteral("I0.4");
 const QString ColletOpenInput = QStringLiteral("I0.5");
 const QString ColletClosedInput = QStringLiteral("I0.6");
 const char *const HomeSensorInputs[4] = { "I1.0", "I1.1", "I1.2", "I1.3" }; // m_axes sırası: X, B, A, Y
+const QString EmergencyInput = QStringLiteral("I1.4"); // acil stop zinciri (NC: 1 = basılı değil)
 const QString PumpOutput = QStringLiteral("Q0.0");
 const QString ClampOutput = QStringLiteral("Q0.1");
 const QString MandrelOutput = QStringLiteral("Q0.2");
@@ -86,9 +87,12 @@ SimMachine::SimMachine(QObject *parent)
 
 
     // Silindirler açılışta bekleme konumunda (açık / geride).
-    m_actuators = { SimActuator { clamp(), SimParameters::ClampTravelSeconds },
-                    SimActuator { mandrel(), SimParameters::MandrelTravelSeconds },
-                    SimActuator { collet(), SimParameters::ColletTravelSeconds } };
+    m_actuators = { SimActuator { clamp(), SimParameters::ClampTravelSeconds, ClampOpenInput,
+                                  ClampClosedInput },
+                    SimActuator { mandrel(), SimParameters::MandrelTravelSeconds, MandrelBackInput,
+                                  MandrelForwardInput },
+                    SimActuator { collet(), SimParameters::ColletTravelSeconds, ColletOpenInput,
+                                  ColletClosedInput } };
 
     defineTimers();
     connect(timers(), &ParameterList::valueChanged, this, [this](const QString &key, double value) {
@@ -296,6 +300,10 @@ void SimMachine::defineIo()
     for (int i = 0; i < 4; ++i)
         in->add(QLatin1String(HomeSensorInputs[i]), homeNames[i]);
 
+    // Acil stop zinciri kapalı kontaktır (NC): buton basılı değilken 1'dir. Kopan kablo da
+    // acil stop gibi görünür; güvenlik devrelerinde kural budur.
+    in->add(EmergencyInput, tr("ACİL STOP HATTI"));
+
     // Valfler tek bobinli varsayıldı (müşteriye sorulacak): bobine enerji verilince (1)
     // silindir iş konumuna gider, enerji kesilince (0) geri döner. Çift bobinli valfte
     // her yön ayrı bir çıkıştır.
@@ -323,6 +331,7 @@ void SimMachine::updateIo()
         const double distance = std::abs(sim.axis->position() - sim.params.homePosition);
         in->setActive(QLatin1String(HomeSensorInputs[i]), distance <= SimParameters::HomeSensorWindow);
     }
+    in->setActive(EmergencyInput, !isEmergencyStop());
 
     // Çıkışlar: makinenin verdiği komutlar.
     IoList *out = outputs();
@@ -340,6 +349,9 @@ void SimMachine::updateIo()
 
 QString SimMachine::outputLock(const Actuator *valve) const
 {
+    // Acil stop basılıyken hiçbir çıkış sürülemez.
+    if (isEmergencyStop())
+        return tr("Acil stop basılı");
     // Döngü sürerken (operatörü beklerken de) çıkışları makine sürer.
     if (cycleState() != CycleStopped)
         return tr("Döngü sürüyor (önce STOP)");
@@ -355,11 +367,17 @@ QString SimMachine::outputLock(const Actuator *valve) const
         return tr("Basınç yok");
     case Actuator::AxesMoving:
         return tr("Eksenler hareketli");
-    case Actuator::CycleRunning: // döngü yukarıda
+    case Actuator::EmergencyStop: // acil stop yukarıda
+    case Actuator::CycleRunning:  // döngü yukarıda
     case Actuator::NoInterlock:
         break;
     }
     return {};
+}
+
+bool SimMachine::sensorFaulty(const QString &address) const
+{
+    return !m_faultySensor.isEmpty() && m_faultySensor == address;
 }
 
 // ---------------------------------------------------------------------------
@@ -622,6 +640,77 @@ bool SimMachine::clearTooling()
     return ok;
 }
 
+// ---------------------------------------------------------------------------
+// Sanal arıza denemeleri (yalnızca demo)
+// ---------------------------------------------------------------------------
+
+void SimMachine::pressEmergencyStop(bool pressed)
+{
+    if (isEmergencyStop() == pressed)
+        return;
+    setEmergencyStop(pressed);
+
+    if (pressed) {
+        // Acil stop donanımdır: bütün hareket kesilir, döngü iptal olur, pompa kontaktörü
+        // düşer. Silindir komutlarına dokunulmaz — sıkılı boru kendiliğinden bırakılmaz
+        // (hidrolikte yük tutma ilkesi). Sürücülerin enerjisi kesildiği için eksenlerin
+        // referansı düşer: makine yeniden referans ister. (Müşterinin sürücüleri mutlak
+        // enkoderliyse bu satır kaldırılır; demoda sorulacak.)
+        if (cycleState() != CycleStopped)
+            abortCycle(NoFault); // döngünün arızası değil: sebebi acil stop alarmı anlatır
+        haltAllMotion();
+        m_pumpCommand = false;
+        updatePump(0.0);
+
+        if (state() == Homing && m_homingIndex >= 0)
+            m_homingOrder[m_homingIndex]->axis->setHoming(false);
+        m_homingIndex = -1;
+        m_latchTime = 0.0;
+        for (SimAxis &sim : m_axes) {
+            sim.axis->setHoming(false);
+            sim.axis->setHomed(false);
+            sim.axis->setMoving(false);
+            updateLimitState(sim);
+        }
+        setState(NotHomed);
+
+        raiseAlarm(QStringLiteral("acilStop"), tr("ACİL STOP BASILI"),
+                   tr("Bütün hareketler kesildi, pompa durdu. Butonu çevirip bırakın, RESET'e "
+                      "basın, sonra referans arayın."),
+                   true); // sebebi süren arıza: buton bırakılmadan silinemez
+    } else {
+        // Acil stopu bırakmak makineyi çalıştırmaz, yalnızca çalıştırmaya izin verir
+        // (ISO 13850): arıza RESET bekler, pompayı ve referansı operatör başlatır.
+        setAlarmCondition(QStringLiteral("acilStop"), false);
+    }
+
+    updateInterlocks();
+    updateIo();
+}
+
+void SimMachine::setPressureLoss(bool active)
+{
+    m_pressureLoss = active;
+    updatePump(0.0);
+    updateInterlocks();
+    updateIo();
+}
+
+void SimMachine::setSensorFault(bool faulty)
+{
+    // Demoda bozulan sensör mengene kapalı sensörüdür: döngü mengeneyi kapatır, sensör
+    // gelmez, makine zaman aşımıyla arıza verir ve IO TEST'te sebep görünür.
+    m_faultySensor = faulty ? ClampClosedInput : QString();
+    updateActuators(0.0);
+    updateInterlocks();
+    updateIo();
+}
+
+QString SimMachine::faultSensorLabel()
+{
+    return ClampClosedInput + QLatin1Char(' ') + tr("MENGENE KAPALI");
+}
+
 bool SimMachine::resetAlarms()
 {
     // RESET yalnızca arızayı siler; hareket başlatmaz. Arıza silinince BAŞLAT'ın önü açılır.
@@ -664,7 +753,8 @@ void SimMachine::updatePump(double dt)
     const double nominal = SimParameters::NominalPressure;
     double p = pressure();
 
-    if (m_pumpCommand) {
+    // Sanal arıza (demo): hat kaçağında pompa çalışsa da basınç düşer.
+    if (m_pumpCommand && !m_pressureLoss) {
         p = qMin(nominal, p + nominal / SimParameters::PumpStartSeconds * dt);
         setPumpState(p >= nominal ? PumpRunning : PumpStarting);
     } else {
@@ -691,9 +781,11 @@ void SimMachine::updateActuators(double dt)
         }
 
         // Sensörler yalnızca uç konumları bilir: iki ucun arasındaysa silindir yoldadır.
-        if (sim.progress >= 1.0)
+        // Bozuk sensör (sanal arıza) hiç gelmez: silindir yerine varsa bile makine onu
+        // "yolda" görür ve aşama zaman aşımıyla arıza verir; gerçekte de böyle olur.
+        if (sim.progress >= 1.0 && !sensorFaulty(sim.workSensor))
             actuator->setState(Actuator::On);
-        else if (sim.progress <= 0.0)
+        else if (sim.progress <= 0.0 && !sensorFaulty(sim.restSensor))
             actuator->setState(Actuator::Off);
         else
             actuator->setState(actuator->command() ? Actuator::TurningOn : Actuator::TurningOff);
@@ -723,23 +815,30 @@ void SimMachine::updateInterlocks()
     // Kural 1: mengene boruyu tutarken X (ilerletme) ve A (rotasyon) hareket edemez;
     // boru kıskaçtayken çekilir ya da burulur. Y (öteleme) de kilitlenir: sıkılı boruyu
     // yana kaydırmak boruyu zorlar (güvenli taraftaki varsayım). B (büküm) serbesttir.
-    const Axis::Interlock axisLock = cycleActive ? Axis::CycleActive
+    // Kural 0.1: acil stop basılıyken hiçbir eksen hareket edemez, hiçbir valf sürülemez.
+    const bool emergency = isEmergencyStop();
+
+    const Axis::Interlock axisLock = emergency ? Axis::EmergencyStop
+                                     : cycleActive ? Axis::CycleActive
                                      : clampHolding ? Axis::ClampClosed
                                                     : Axis::NoInterlock;
     axisX()->setInterlock(axisLock);
     axisA()->setInterlock(axisLock);
     axisY()->setInterlock(axisLock);
-    axisB()->setInterlock(cycleActive ? Axis::CycleActive : Axis::NoInterlock);
+    axisB()->setInterlock(emergency ? Axis::EmergencyStop
+                          : cycleActive ? Axis::CycleActive : Axis::NoInterlock);
 
     // Kural 2: basınç yoksa hiçbir silindir kumanda edilemez.
     // Kural 3: X, A ya da Y hareket ederken mengene kumanda edilemez.
-    const Actuator::Interlock actuatorLock = cycleRunning ? Actuator::CycleRunning
-                                             : pumpOk     ? Actuator::NoInterlock
-                                                          : Actuator::PumpOff;
-    clamp()->setInterlock(cycleRunning ? Actuator::CycleRunning
-                          : !pumpOk    ? Actuator::PumpOff
-                          : axesBusy   ? Actuator::AxesMoving
-                                       : Actuator::NoInterlock);
+    const Actuator::Interlock actuatorLock = emergency    ? Actuator::EmergencyStop
+                                             : cycleRunning ? Actuator::CycleRunning
+                                             : pumpOk       ? Actuator::NoInterlock
+                                                            : Actuator::PumpOff;
+    clamp()->setInterlock(emergency     ? Actuator::EmergencyStop
+                          : cycleRunning ? Actuator::CycleRunning
+                          : !pumpOk      ? Actuator::PumpOff
+                          : axesBusy     ? Actuator::AxesMoving
+                                         : Actuator::NoInterlock);
     mandrel()->setInterlock(actuatorLock);
     collet()->setInterlock(actuatorLock);
 

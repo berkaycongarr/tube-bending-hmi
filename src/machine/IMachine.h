@@ -61,6 +61,7 @@ class IMachine : public QObject
     Q_PROPERTY(QString alarmDetail READ alarmDetail NOTIFY alarmsChanged)
     Q_PROPERTY(int alarmCount READ alarmCount NOTIFY alarmsChanged)
     Q_PROPERTY(bool canResetAlarms READ canResetAlarms NOTIFY alarmsChanged)
+    Q_PROPERTY(bool emergencyStop READ isEmergencyStop NOTIFY emergencyStopChanged)
 
 public:
     enum State {
@@ -172,6 +173,10 @@ public:
 
     // Makinenin arızaları: duranlar ve geçmiş (üst şeritteki alarm ve ARIZA GEÇMİŞİ).
     AlarmList *alarms() const { return m_alarms; }
+
+    // Acil stop basılı mı? Acil stop donanımdır (ISO 13850): ekrandaki hiçbir buton onun
+    // yerine geçmez; makine yalnızca durumunu bildirir, ekran da gösterir.
+    bool isEmergencyStop() const { return m_emergencyStop; }
 
     bool hasAlarm() const { return m_alarms->hasUnresolved(); } // silinmemiş arıza var mı?
     int alarmCount() const { return m_alarms->unresolved(); }
@@ -328,6 +333,7 @@ signals:
     void toolingChanged();
     void loadPositionChanged();
     void alarmsChanged(); // arıza oluştu, sebebi değişti ya da silindi
+    void emergencyStopChanged();
 
 protected:
     // Arıza bildir (alt sınıflar kullanır). persistent: sebebi sürüyor demektir; böyle bir
@@ -342,6 +348,15 @@ protected:
     void setAlarmCondition(const QString &code, bool present)
     {
         m_alarms->setCondition(code, present);
+    }
+
+    // Acil stop girişinin durumu (gerçek makinede PLC'den okunur).
+    void setEmergencyStop(bool pressed)
+    {
+        if (m_emergencyStop == pressed)
+            return;
+        m_emergencyStop = pressed;
+        emit emergencyStopChanged();
     }
 
     // Boru alma konumu makinenin ayarıdır: alt sınıf yazar (açılışta ve ayar değişince).
@@ -436,6 +451,7 @@ private:
     int m_partCount = 0;
     int m_totalCount = 0;
     double m_loadPosition = 0.0;
+    bool m_emergencyStop = false;
     bool m_hasTooling = false;
     double m_toolingRadius = 0.0;
     double m_toolingDiameter = 0.0;

@@ -43,6 +43,15 @@ public:
     bool clearTooling() override;
     bool resetAlarms() override;
 
+    // Sanal arıza denemeleri: YALNIZCA DEMO İÇİNDİR (gerçek makinede arızayı makine üretir).
+    // Ekrandaki "sanal makine" paneli bunları SimControls üzerinden çağırır.
+    void pressEmergencyStop(bool pressed); // acil stop butonu basıldı / bırakıldı
+    void setPressureLoss(bool active);     // hat kaçağı: pompa çalışsa da basınç düşer
+    void setSensorFault(bool faulty);      // mengene kapalı sensörü (I0.2) bozuk
+    bool isPressureLoss() const { return m_pressureLoss; }
+    bool hasSensorFault() const { return !m_faultySensor.isEmpty(); }
+    static QString faultSensorLabel();     // bozulan sensörün adı (ekranda yazar)
+
 private:
     // Sanal makinenin her eksen için tuttuğu bilgiler.
     struct SimAxis
@@ -69,15 +78,20 @@ private:
     struct SimActuator
     {
         SimActuator() = default;
-        SimActuator(Actuator *actuator, double travelSeconds)
+        SimActuator(Actuator *actuator, double travelSeconds, const QString &restSensor,
+                    const QString &workSensor)
             : actuator(actuator)
             , travelSeconds(travelSeconds)
+            , restSensor(restSensor)
+            , workSensor(workSensor)
         {
         }
 
         Actuator *actuator = nullptr;
         double travelSeconds = 1.0; // bir uçtan öbürüne gitme süresi
         double progress = 0.0;      // 0: bekleme konumu, 1: iş konumu
+        QString restSensor;         // bekleme konumunu gören sensörün adresi (ör. I0.1)
+        QString workSensor;         // iş konumunu gören sensörün adresi (ör. I0.2)
     };
 
     // Üretim döngüsünün aşamaları. Sıra: araba boru alma konumuna gider (büküm
@@ -118,6 +132,7 @@ private:
     void defineIo();                                // IO TEST'teki giriş ve çıkışları tanımla
     void updateIo();                                // girişlerin, çıkışların durumu ve kilitleri
     QString outputLock(const Actuator *valve) const; // çıkış neden sürülemiyor? (pompa: nullptr)
+    bool sensorFaulty(const QString &address) const;  // bu sensör bozuk mu? (sanal arıza)
 
     void tick();                     // döngünün bir turu
     void updatePump(double dt);      // basıncı dt saniye ilerlet
@@ -169,4 +184,8 @@ private:
 
     QString m_memoryFile;         // makinenin belleği (boşsa değerler saklanmaz)
     bool m_loadingMemory = false; // bellekten okunurken yeniden yazılmasın
+
+    // Sanal arıza denemeleri (demo)
+    bool m_pressureLoss = false; // hat kaçağı
+    QString m_faultySensor;      // bozuk sensörün adresi (boş: arıza yok)
 };

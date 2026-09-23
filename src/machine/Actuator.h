@@ -35,10 +35,11 @@ public:
 
     // Kumanda neden kilitli?
     enum Interlock {
-        NoInterlock, // kilit yok, kumanda edilebilir
-        PumpOff,     // pompa çalışmıyor: basınç yok
-        AxesMoving,  // eksenler hareket ediyor (yalnızca mengene için)
-        CycleRunning // üretim döngüsü çalışıyor: silindirleri makine sürüyor
+        NoInterlock,  // kilit yok, kumanda edilebilir
+        PumpOff,      // pompa çalışmıyor: basınç yok
+        AxesMoving,   // eksenler hareket ediyor (yalnızca mengene için)
+        CycleRunning, // üretim döngüsü çalışıyor: silindirleri makine sürüyor
+        EmergencyStop // acil stop basılı: valfler kumanda edilemez
     };
     Q_ENUM(Interlock)
 

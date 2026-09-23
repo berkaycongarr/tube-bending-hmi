@@ -36,9 +36,10 @@ class Axis : public QObject
 public:
     // Hareket neden kilitli?
     enum Interlock {
-        NoInterlock, // kilit yok, hareket edebilir
-        ClampClosed, // mengene boruyu tutuyor (X, A ve Y için)
-        CycleActive  // üretim döngüsü sürüyor (beklerken de): eksenleri makine sürer
+        NoInterlock,   // kilit yok, hareket edebilir
+        ClampClosed,   // mengene boruyu tutuyor (X, A ve Y için)
+        CycleActive,   // üretim döngüsü sürüyor (beklerken de): eksenleri makine sürer
+        EmergencyStop  // acil stop basılı: hiçbir eksen hareket edemez
     };
     Q_ENUM(Interlock)
 

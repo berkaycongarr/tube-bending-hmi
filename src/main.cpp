@@ -4,6 +4,7 @@
 #include <QStandardPaths>
 
 #include "access/AccessControl.h"
+#include "machine/SimControls.h"
 #include "machine/SimMachine.h"
 #include "program/BendProgram.h"
 #include "program/ProgramStore.h"
@@ -48,6 +49,11 @@ int main(int argc, char *argv[])
 
     // Ayarcı şifresi: ayar sayfalarında değerleri değiştirmek için.
     AccessControl access(&settings);
+
+    // Sanal makinenin arıza denemesi kumandası: yalnızca demo içindir. Gerçek makineye
+    // geçerken bu satır silinir ve ekrana "simulator" olarak boş (null) verilir; ekran da
+    // "sanal makine" panelini göstermez.
+    SimControls simulator(&machine);
 
     // Açılış: son kullanılan program; o açılamazsa klasördeki ilk program.
     // Klasör boşsa örnek program oraya kaydedilir (demoda liste boş görünmesin).
@@ -121,6 +127,7 @@ int main(int argc, char *argv[])
         { QStringLiteral("store"), QVariant::fromValue(&store) },
         { QStringLiteral("dies"), QVariant::fromValue(&dies) },
         { QStringLiteral("access"), QVariant::fromValue(&access) },
+        { QStringLiteral("simulator"), QVariant::fromValue(&simulator) },
     });
 
     // QML dosyası yüklenemezse (yazım hatası vb.) programı kapat.

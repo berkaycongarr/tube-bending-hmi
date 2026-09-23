@@ -42,6 +42,8 @@ T.Button {
             return qsTr("Eksenler hareketli")
         case Actuator.CycleRunning:
             return qsTr("Üretimde")
+        case Actuator.EmergencyStop:
+            return qsTr("Acil stop")
         default:
             return ""
         }

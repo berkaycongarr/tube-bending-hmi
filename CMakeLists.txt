@@ -54,6 +54,7 @@ qt_add_qml_module(appBoruHmi
         qml/SettingsPage.qml
         qml/IoTestPage.qml
         qml/AlarmsDialog.qml
+        qml/SimulatorDialog.qml
     SOURCES
         src/machine/Actuator.h
         src/machine/Axis.h
@@ -67,6 +68,8 @@ qt_add_qml_module(appBoruHmi
         src/machine/SimParameters.h
         src/machine/SimMachine.h
         src/machine/SimMachine.cpp
+        src/machine/SimControls.h
+        src/machine/SimControls.cpp
         src/program/BendProgram.h
         src/program/BendProgram.cpp
         src/program/ProgramStore.h

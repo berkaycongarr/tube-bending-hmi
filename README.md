@@ -164,9 +164,39 @@ yazılması (izlenebilirlik) müşteriye sorulacak.
 Üst şeritteki durum kutusu da makinenin o an ne yaptığını söyler: ÜRETİMDE (adım 2/5),
 BORU BEKLENİYOR, ADIM BEKLENİYOR, PARÇA BİTTİ, REFERANS ARANIYOR, HAZIR, REFERANSSIZ.
 
-Acil stop donanım butonudur (ISO 13850): ekrandaki STOP normal duruştur, acil stop yerine
-geçmez — dokunmatik ekran güvenlik devresi değildir. Makinenin acil stop girişinin ekranda
-gösterilmesi ve sanal makinede arıza üretme (demoda göstermek için) sıradaki adımdır.
+### Acil stop
+
+Acil stop **donanım** butonudur (ISO 13850): ekrandaki STOP normal duruştur, acil stop yerine
+geçmez — dokunmatik ekran güvenlik devresi değildir. Ekranın işi acil stopun durumunu göstermek
+ve makinenin ne yaptığını anlatmaktır. Acil stop zinciri IO TEST'te `I1.4 ACİL STOP HATTI`
+girişidir; kapalı kontaktır (NC), yani buton basılı **değilken** 1'dir. Kopan kablo da acil stop
+gibi görünür: güvenlik devrelerinde kural budur.
+
+Acil stop basılınca makine:
+
+1. bütün hareketleri keser ve üretim döngüsünü iptal eder,
+2. pompayı durdurur (kontaktör düşer),
+3. **silindir komutlarına dokunmaz**: sıkılı boru kendiliğinden bırakılmaz (hidrolikte yük tutma
+   ilkesi; tek bobinli valfin enerjisini kesmek her zaman güvenli değildir),
+4. eksenlerin referansını düşürür — sürücülerin enerjisi kesildiği varsayımıyla; makine yeniden
+   referans ister (müşterinin sürücüleri mutlak enkoderliyse bu adım kaldırılır, demoda sorulacak),
+5. "ACİL STOP BASILI" arızasını verir. Bu arızanın **sebebi sürdüğü için** buton bırakılmadan
+   RESET çalışmaz.
+
+Buton bırakılınca makine kendiliğinden çalışmaz: arıza RESET bekler, pompayı ve referansı
+operatör başlatır. Bırakmak yalnızca yeniden başlatmaya izin verir (ISO 13850).
+
+### Sanal makine · arıza denemesi (yalnızca demo)
+
+Alt şeritteki **SANAL MAKİNE** etiketine dokununca açılan pencere üç arıza denemesi sunar:
+acil stop, hat kaçağı (pompa çalışsa da basınç düşer) ve sensör arızası (`I0.2 MENGENE KAPALI`
+sensörü hiç gelmez). Böylece demoda arıza yönetimi canlı gösterilir: sensör arızasında mengene
+kapanır ama makine göremez, döngü zaman aşımıyla durur ve sebep IO TEST'te görünür (Q0.1 = 1
+iken I0.2 = 0).
+
+Bu pencere gerçek makinede yoktur: kumandası ayrı bir sınıftadır (`SimControls`) ve `main.cpp`
+gerçek makineye geçerken ekrana boş verir. Makine sözleşmesi (`IMachine`) bu yüzden temiz kalır —
+ekran, makineden arıza uydurmasını isteyemez.
 
 ## Ayarlar, zamanlar ve ayarcı şifresi
 
@@ -232,6 +262,7 @@ silindir yoldayken ikisi de 0'dır. Referans sensörü, eksen referans noktasın
 | I0.3 / I0.4 | Malafa geride / ileride | Malafa o uçta |
 | I0.5 / I0.6 | Pens açık / kapalı | Pens o uçta |
 | I1.0 – I1.3 | X, B, A, Y referans sensörü | Eksen referans noktasında |
+| I1.4 | Acil stop hattı (NC) | Acil stop basılı **değil** (hat kapalı) |
 
 | Adres | Çıkış | 1 olduğunda |
 |---|---|---|
@@ -291,6 +322,7 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `src/machine/Actuator.h` | Hidrolik silindir: komut, sensör durumu ve kilit |
 | `src/machine/IMachine.h` | Makine sözleşmesi: ekranın tanıdığı tek sınıf |
 | `src/machine/SimMachine.*` | Sanal makine (demo) |
+| `src/machine/SimControls.*` | Sanal makinenin arıza denemesi kumandası (yalnızca demo) |
 | `src/machine/SimParameters.h` | Sanal makinenin ayarları: limitler, hızlar, sürelerin varsayılanları |
 | `src/program/BendProgram.*` | Büküm programı (reçete): komut listesi, açınım boyu, doğrulama, JSON biçimi |
 | `src/program/ProgramStore.*` | Program deposu: klasördeki dosyalar, aç / kaydet / sil |
@@ -313,6 +345,7 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `qml/NameDialog.qml` | Program adı girme penceresi |
 | `qml/ConfirmDialog.qml` | Onay ve bilgi penceresi |
 | `qml/AlarmsDialog.qml` | Arıza geçmişi penceresi: duran ve silinmiş arızalar, RESET |
+| `qml/SimulatorDialog.qml` | Sanal makine · arıza denemesi penceresi (yalnızca demo) |
 | `qml/MotionPage.qml` | Hareket sayfası: jog, hedef konuma gitme ve hidrolik |
 | `qml/SettingsPage.qml` | Ayarlar sayfası: eksen limitleri ve hızları, boru alma konumu, şifre değiştirme |
 | `qml/TimersPage.qml` | Zamanlar sayfası: makinenin süreleri, varsayılana dönme |

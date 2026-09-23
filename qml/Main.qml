@@ -21,6 +21,10 @@ Window {
     // main.cpp tarafından verilen ayarcı şifresi denetimi (ayar sayfaları için).
     required property AccessControl access
 
+    // Sanal makinenin arıza denemesi kumandası: yalnızca demoda vardır. Gerçek makinede
+    // boş (null) gelir ve "sanal makine" paneli hiç açılmaz.
+    required property SimControls simulator
+
     // Seçili sayfa: 0 = Üretim, 1 = Tasarım, 2 = Kalıplar, 3 = Hareket, 4 = Ayarlar,
     // 5 = Zamanlar, 6 = IO Test (sıra müşterinin ekranındaki menüyle aynı)
     property int currentPage: 0
@@ -503,6 +507,7 @@ Window {
             spacing: Theme.gap
 
             Rectangle {
+                objectName: "simPill"
                 visible: root.machine.simulation
                 implicitWidth: simText.implicitWidth + 28
                 implicitHeight: 30
@@ -512,14 +517,21 @@ Window {
                 border.width: 2
 
                 // "SİMÜLASYON" sekmesiyle karışmasın diye: sanal makine (SimMachine) çalışıyor.
+                // Dokununca arıza denemesi penceresi açılır (yalnızca demoda).
                 Text {
                     id: simText
 
                     anchors.centerIn: parent
-                    text: qsTr("SANAL MAKİNE · gerçek makineye bağlı değil")
+                    text: root.simulator ? qsTr("SANAL MAKİNE · gerçek makineye bağlı değil  ›")
+                                         : qsTr("SANAL MAKİNE · gerçek makineye bağlı değil")
                     font.pixelSize: Theme.fontSmall
                     font.bold: true
                     color: Theme.text
+                }
+
+                TapHandler {
+                    enabled: root.simulator !== null
+                    onTapped: simulatorDialog.open()
                 }
             }
 
@@ -580,6 +592,13 @@ Window {
         repeat: true
         triggeredOnStart: true
         onTriggered: clock.text = Qt.formatDateTime(new Date(), "dd.MM.yyyy  HH:mm:ss")
+    }
+
+    // Sanal makine · arıza denemesi (yalnızca demoda; alt şeritteki etikete dokununca).
+    SimulatorDialog {
+        id: simulatorDialog
+
+        simulator: root.simulator
     }
 
     // Arıza geçmişi penceresi (arıza şeridinden ve alt şeritten açılır).
