@@ -16,7 +16,7 @@
 // Makineyle konuşma sözleşmesi.
 //
 // Ekran (QML) yalnızca bu sınıfı tanır. Arkasında demo için sanal makine
-// (SimMachine) ya da gerçek iş için PLC bağlantısı (ileride SiemensMachine)
+// (SimMachine) ya da gerçek iş için PLC bağlantısı (ileride PlcMachine)
 // durabilir. Ortak durum burada tutulur; komutları alt sınıflar uygular.
 //
 // QML tarafında bu sınıfın adı "Machine"dır.

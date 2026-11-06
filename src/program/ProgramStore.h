@@ -10,7 +10,7 @@ class BendProgram;
 
 // Program deposu: büküm programlarını bir klasörde, her birini ayrı bir .json
 // dosyası olarak saklar. Dosyanın adı programın adıdır
-// (ör. "Ortaokul Oturak (2026).json"). Dosyalar kopyalanabilir, USB ile başka
+// (ör. "Örnek U Parça.json"). Dosyalar kopyalanabilir, USB ile başka
 // makineye taşınabilir, yedeklenebilir.
 //
 // Depo, ekrandaki tek programla (açık program) çalışır: onu dosyadan açar ve

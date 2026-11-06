@@ -5,6 +5,29 @@ CNC boru bükme makinesi için Windows operatör ekranı (HMI). C++ ve Qt 6 (QML
 Şu an **sanal makineyle** çalışır: gerçek makine yerine sanal bir makine (`SimMachine`) kullanılır.
 Ekranın sol altındaki "SANAL MAKİNE" yazısı bunu hatırlatır.
 
+> **In English:** A Windows operator panel (HMI) for a CNC tube bending machine, written in C++ and
+> Qt 6 (QML). I built it as a demo for a pipe factory; it runs against a simulated machine (virtual PLC).
+> The UI talks only to the `IMachine` interface, so a real PLC driver can replace the simulator without
+> touching UI code. Features: homing, jog with software limits and a watchdog, hydraulic actuators with
+> interlocks, a bend-program editor with developed-length validation and JSON files, a die library,
+> semi/fully automatic production cycles with part time and hourly output, latched alarms with RESET and
+> history, emergency stop, a live IO test page, PIN-protected settings and a 3D part preview.
+> The UI and the documentation below are in Turkish.
+
+## Ekran görüntüleri
+
+| Üretim | Tasarım ve simülasyon |
+|:---:|:---:|
+| ![ÜRETİM sayfası](docs/ekranlar/uretim.png) | ![TASARIM sayfası ve SİMÜLASYON sekmesi](docs/ekranlar/tasarim-simulasyon.png) |
+| **Hareket** | **Arıza ve RESET** |
+| ![HAREKET sayfası](docs/ekranlar/hareket.png) | ![Arıza şeridi ve arıza geçmişi](docs/ekranlar/ariza.png) |
+
+## Durum
+
+Demo aşamasında: bir boru fabrikası için hazırlandı ve sanal makineyle çalışıyor, gerçek bir
+makineye bağlanmadı. Gerçek makineye geçmek, `IMachine`'i makinenin PLC'siyle Ethernet üzerinden
+konuşan bir sınıfla uygulamak demektir; ekran kodu değişmez (bkz. [Mimari](#mimari)).
+
 ## Gereksinimler
 
 - Qt 6.8 veya üstü (geliştirme ortamı: Qt 6.11.2, MinGW 13.1 64-bit)
@@ -102,7 +125,7 @@ Referans arama sırası: B → Y → A → X. Eksenlerin yolu, varsayılan limit
 
 ```
 Ekran (QML)  →  IMachine (sözleşme)  ←  SimMachine      (demo: sanal makine)
-                                     ←  SiemensMachine  (gerçek makine, ileride)
+                                     ←  PlcMachine      (gerçek PLC sürücüsü, ileride)
 ```
 
 Ekran yalnızca `IMachine`'i tanır. Gerçek makineye geçerken ekran kodu değişmez;
@@ -444,3 +467,13 @@ yakına boyanır, uzaktaki yerler biraz soluk görünür. Ayrıntılar `qml/Part
 | `qml/AxisDisplay.qml` | Eksen konum göstergesi |
 | `resources/app.ico` | Programın ikonu (16–256 piksel) |
 | `resources/app.rc` | İkonun ve sürüm bilgisinin exe'ye gömülmesi (yalnızca Windows) |
+
+## Lisans
+
+Bu depo portföy amaçlı paylaşılmıştır ve bir açık kaynak lisansı içermez: tüm hakları saklıdır.
+Kodu kopyalamak, dağıtmak ya da kendi projenizde kullanmak için lütfen izin isteyin.
+Uygulama Qt 6'yı LGPLv3 kapsamında kullanır; GPL lisanslı Qt modülleri kullanılmadı.
+
+*All rights reserved. This repository is shared as a portfolio piece; no open-source license is granted.*
+
+Berkay Çongar · congarberkay@gmail.com · [LinkedIn](https://linkedin.com/in/berkaycongar)

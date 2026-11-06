@@ -375,9 +375,9 @@ void BendProgram::clear(const QString &name)
 
 void BendProgram::loadExample()
 {
-    // Müşterinin ekranındaki program: okul sandalyesinin oturak iskeleti (U parça).
+    // İki bükümlü bir U parça.
     Data data;
-    data.name = QStringLiteral("Ortaokul Oturak (2026)");
+    data.name = QStringLiteral("Örnek U Parça");
     data.tubeLength = 980.0;
     data.tubeDiameter = 50.0;
     data.dieRadius = 116.0;

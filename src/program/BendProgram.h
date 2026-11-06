@@ -128,7 +128,7 @@ public:
     // Boş yeni program. Boru ve kalıp bilgileri kalır: takılı kalıp aynıdır.
     void clear(const QString &name);
 
-    // Örnek program: müşterinin ekranındaki "Ortaokul Oturak (2026)".
+    // Örnek program: iki bükümlü bir U parça.
     void loadExample();
 
 signals:

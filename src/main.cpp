@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
 
     // Demo için sanal makine. Gerçek makineye geçerken değişecek satır burası
-    // (ör. SiemensMachine machine;). Ekran kodu hiç değişmeyecek.
+    // (ör. PlcMachine machine;). Ekran kodu hiç değişmeyecek.
     SimMachine machine;
 
     // Büküm programı (reçete). Adımların alabileceği değerler makinenin eksen
